@@ -1,0 +1,286 @@
+---
+jupyter:
+  jupytext:
+    text_representation:
+      extension: .Rmd
+      format_name: rmarkdown
+      format_version: '1.2'
+      jupytext_version: 1.5.2
+  kernelspec:
+    display_name: R
+    language: R
+    name: ir
+---
+
+<!-- #region deletable=false editable=false nbgrader={"cell_type": "markdown", "checksum": "dd416edabec2808c078b5edcc6251403", "grade": false, "grade_id": "cell-bd0b11511d1e9d9c", "locked": true, "schema_version": 3, "solution": false, "task": false} -->
+# Relación de ejercicios 3
+
+En estos ejercicios practicaremos las operaciones para manejar DataFrames. En los primeros ejercicios no se puede utilizar ningún paquete de R adicional, pero en los últimos es obligatorio utilizar `dplyr`, tal como se indica en cada ejercicio.
+
+### Las funciones NUNCA deben hacer print() ni mostrar nada por pantalla, sino devolver el resultado del cálculo utilizando return.
+<!-- #endregion -->
+
+<!-- #region deletable=false editable=false nbgrader={"cell_type": "markdown", "checksum": "e12183ace23390d993386478c68e163d", "grade": false, "grade_id": "cell-6931830012e6c23e", "locked": true, "schema_version": 3, "solution": false, "task": false} -->
+**INSTRUCCIONES**: en cada trozo de código debes responder a la pregunta formulada, asegurándote de que el resultado queda guardado en la(s) variable(s) que por defecto vienen inicializadas a `NULL`. No se necesita usar variables intermedias, pero puedes hacerlo siempre que el resultado final del cálculo quede guardado exactamente en la variable que venía inicializada a NULL (debes reemplazar None por la secuencia de transformaciones necesarias, pero nunca cambiar el nombre de esa variable). **El código de tu solución puede ocupar tantas líneas como necesites, pero deben estar situadas entre la línea "NO MODIFICAR ESTA LÍNEA ..." y la línea "FIN SOLUCION". Ninguna de esas dos líneas debe ser modificada bajo ningún concepto.** En caso contrario tu solución no será puntuada.
+
+Después de cada ejercicio verás varias líneas de código ya hechas. Ejecútalas todas (no modifiques su código) y te dirán si tu solución es correcta o no. Si la solución es correcta, no se mostrará nada, pero si es incorrecta, verás un error indicando cuál es el test que tu solución no pasa. Además de esas pruebas, se realizarán algunas más (ocultas) a la hora de puntuar el ejercicio, pero si tu código pasa con éxito las líneas que ves, puedes estar bastante seguro de que tu solución es correcta. Asegúrate de que, al menos, todas las comprobaciones indican que tu solución es correcta antes de subir el ejercicio a la plataforma.
+
+Una vez finalizada la actividad, guarda tu fichero en RStudio, después ciérralo, vuélvelo a abrir y ejecútalo completo, y asegúrate de que no se lanza ningún error. De esta manera comprobarás que no has olvidado nada y que es posible ejecutarlo completo desde 0 y sin errores. **No se corregirá ningún fichero que tenga errores de sintaxis y no se pueda ejecutar completo**. No pasa nada si alguna de las comprobaciones lanza errores por ser incorrecta, pero el código de la solución de cada ejercicio no puede tener errores de sintaxis. Es lo mínimo que se debe exigir.
+
+**RECUERDA SUBIR CADA UNO DE LOS FICHEROS .R TAL CUAL (sueltos), SIN COMPRIMIR Y SIN CAMBIARLES EL NOMBRE. NO SUBAS NADA MÁS QUE LOS FICHEROS .R (no subas ningún PDF, ni ningún fichero ZIP ni similar)**. La plataforma ya los separa automáticamente en carpetas con vuestro nombre completo, por lo que no es necesario que se lo pongas al fichero.
+<!-- #endregion -->
+
+<!-- #region deletable=false editable=false nbgrader={"cell_type": "markdown", "checksum": "53381d474847b3c03fc62d10c62b3f4f", "grade": false, "grade_id": "cell-42564346aa5f4ad2", "locked": true, "schema_version": 3, "solution": false, "task": false} -->
+### No está permitido usar ningún paquete adicional en este ejercicio
+**Ejercicio 1 (2 puntos).** Crear el siguiente data.frame y almacenarlo en la variable `personas`, teniendo en cuenta que **la columna `Sex` debe crearse como factor**, y no como columna de caracteres. Recuerda el uso del argumento `stringsAsFactors`.
+
+- Una vez hecho, reemplazar la columna `Sex` por otra en la que sus valores hayan sido invertidos, renombrando solamente los niveles del factor (sin modificar los datos, que serán modificados automáticamente si renombramos los niveles).
+
+- A continuación, crear el siguiente data.frame en el que `Working` debe ser un factor, almacenarlo en la variable `df.adicional` y finalmente, añadir dicha variable al data.frame `personas` por la derecha, guardando el resultado en una nueva variable `personas.ampliado` de tipo data.frame. Es obligatorio que `df.adicional` sea creada como data.frame; no se admitirá que sea un vector.
+
+<!-- #endregion -->
+
+```{r deletable=FALSE, nbgrader="{'cell_type': 'code', 'checksum': '7e11add8eb02e27ab364b02cc65e920c', 'grade': False, 'grade_id': 'ej1-respuesta', 'locked': False, 'schema_version': 3, 'solution': True, 'task': False}"}
+# NO MODIFICAR ESTA LINEA ej1-respuesta
+personas = data.frame(
+          Age=c(25,31,23,52,76,49,26),
+          Height= c(177,162,190,179,163,183,164),
+          Weight= c(57,69,83,75,70,83,53),
+          Sex= c('F', 'F', 'M', 'M', 'F', 'M', 'F'),
+          stringsAsFactors=TRUE
+        )
+rownames(personas)= c('Alex', 'Lilly', 'Mark','Oliver','Martha','Lucas','Caroline')
+levels(personas[['Sex']])= c('M','F')
+df.adicional = data.frame(
+            Working= c('Yes', 'No','No', 'Yes', 'Yes', 'No', 'Yes'),
+            stringsAsFactors=TRUE
+)
+rownames(df.adicional)= c('Alex', 'Lilly', 'Mark','Oliver','Martha','Lucas','Caroline')
+personas.ampliado = cbind(personas, df.adicional)
+# FIN SOLUCION
+
+# Ejecuta las lineas siguientes para comprobar si tu solucion es correcta:
+```
+
+```{r deletable=FALSE, editable=FALSE, nbgrader="{'cell_type': 'code', 'checksum': '6ceffca6d1f49ffd6b60696ac2101bae', 'grade': True, 'grade_id': 'ej1-test', 'locked': True, 'points': 1.5, 'schema_version': 3, 'solution': False, 'task': False}"}
+stopifnot(is.data.frame(df.adicional))
+stopifnot(is.data.frame(personas))
+stopifnot(is.data.frame(personas.ampliado))
+stopifnot(all(colnames(personas) == c("Age", "Height", "Weight", "Sex")))
+stopifnot(all(rownames(personas) == c("Alex", "Lilly", "Mark", "Oliver", "Martha", "Lucas", "Caroline")))
+stopifnot(all(colnames(df.adicional) == c("Working")))
+stopifnot(all(rownames(df.adicional) == c("Alex", "Lilly", "Mark", "Oliver", "Martha", "Lucas", "Caroline")))
+stopifnot(is.factor(personas.ampliado$Sex))
+stopifnot(personas.ampliado["Alex", "Sex"] == "M")
+stopifnot(is.factor(df.adicional$Working))
+stopifnot(all(colnames(personas.ampliado) == c("Age", "Height", "Weight", "Sex", "Working")))
+```
+
+<!-- #region deletable=false editable=false nbgrader={"cell_type": "markdown", "checksum": "d3db5a60d03a77cff0091fd227092a9c", "grade": false, "grade_id": "cell-9fd328c340860990", "locked": true, "schema_version": 3, "solution": false, "task": false} -->
+### No está permitido usar ningún paquete adicional en este ejercicio
+
+**Ejercicio 2 (2 puntos).** Usando la variable `state.x77` que viene definida en R, comprobar si ya es un data.frame con la función `is.data.frame` y, si no lo fuera, convertirlo a un data.frame con la función `as.data.frame` y guardar el resultado en la variable `state.df`. Recuerda que el nombre del estado pasará a ser el nombre de cada fila, no una columna convencional.
+
+- Una vez hecho esto, reemplazar en `state.df` por `NA` **todos los valores de la columna `Illiteracy` para aquellos estados cuya área (`Area`) supere en más de un 50 % a la superficie media de los estados** (es decir, el `Area` sea mayor que 1.5 veces `mean.area`). Para esto, primero calcular la media de ingreso de todos los estados y guardarlos en la variable `mean.area`. A partir de ella, crear una máscara booleana sobre las filas como resultado de comparar `mean.area` con la columna `Area`, y guardarla en la variable `mascara.mayor.area` utilizando los nombres de fila extraídos de `state.df`.
+
+- En el propio `state.df` añadir una fila nueva cuyo nombre de fila sea `Minimos` que contenga en cada columna el **mínimo** de los valores de todas las filas. Dicha fila será el resultado de invocar a la función `apply` con `MARGIN = 2` y pasándole la función `min`. La fila debe crearse con ese nombre directamente, en vez de indicar el nombre después. No olvides usar el argumento `na.rm`.
+
+- A continuación, crear una **función** `aniadeProporciones(df)` que reciba un data.frame cualquiera, acerca del cual podemos asumir que todas sus columnas son numéricas y que ya va a existir una **fila** con nombre `Minimos` (sin tilde). La función debe **devolver un nuevo data.frame** que tendrá el **doble de columnas** que el data.frame pasado como argumento: la primera mitad de ellas serán idénticas al data.frame, y la segunda mitad (es decir, añadidas por la derecha) serán el resultado de dividir los datos de las columnas originales entre el mínimo de esa columna (que se encuentra en la fila `Minimos`).
+
+- Los nombres de las nuevas columnas deben ser iguales a los de las columnas originales, pero con la terminación `_prop`. Utiliza `paste` con `sep = _` y la cadena `prop` para ir componiendo cada nuevo nombre de columna. El alumno es libre de usar bucles o bien lapply para ir recorriendo el vector de nombres de columna del argumento `df`. *La función no debe estar pensada específicamente para el data.frame `state.df` sino para cualquier data.frame en el que exista una fila llamada Minimos*. PISTA: crea una nueva variable dentro de la función llamada `resultado`, que inicialmente sea igual al argumento `df`, y ve añadiéndole las nuevas columnas.
+
+- Como caso particular, invocar la función creada sobre el data.frame `state.df` y guardar el resultado en la variable `state.df.prop`. 
+<!-- #endregion -->
+
+```{r deletable=FALSE, nbgrader="{'cell_type': 'code', 'checksum': '460c6b4ef961bad2a35d7b4531bf07c2', 'grade': False, 'grade_id': 'ej2-respuesta', 'locked': False, 'schema_version': 3, 'solution': True, 'task': False}"}
+# NO MODIFICAR ESTA LINEA ej2-respuesta
+is.data.frame(state.x77)
+state.df = as.data.frame(state.x77)
+mean.area = mean(state.df$Area)
+mascara.mayor.area= state.df$Area>1.5*mean.area
+state.df[mascara.mayor.area, "Illiteracy"]=NA
+state.df['Minimos',]= apply(state.df, MARGIN=2,FUN= min ,na.rm=TRUE)
+
+aniadeProporciones <- function(df){
+  resultado= df
+  for (c in seq_along(resultado)){
+    resultado[c]= df[c] / df['Minimos',c]
+    names(resultado) <- paste(names(df),"prop",sep= "_")
+    final.df=cbind(df, resultado)
+    
+  }
+  return(final.df)
+}
+state.df.prop = aniadeProporciones(state.df)
+# FIN SOLUCION
+
+# Ejecuta las lineas siguientes para comprobar si tu solucion es correcta:
+```
+
+```{r deletable=FALSE, editable=FALSE, nbgrader="{'cell_type': 'code', 'checksum': '0826e0fb5637e49334a864c382a29f8c', 'grade': True, 'grade_id': 'ej2-test', 'locked': True, 'points': 3, 'schema_version': 3, 'solution': False, 'task': False}"}
+stopifnot(is.data.frame(state.df))
+stopifnot(all(rownames(state.df) == c(rownames(state.x77), "Minimos")))
+stopifnot(is.logical(mascara.mayor.area))
+stopifnot(length(mascara.mayor.area) == nrow(state.x77))
+stopifnot(sum(mascara.mayor.area) == 7)                              # hay 9 estados con más de 12 letras
+stopifnot(ncol(aniadeProporciones(state.df)) == 2*ncol(state.df)) # el df resultante debe tener el doble de columnas que el original
+stopifnot(all(paste(colnames(state.df), "prop", sep = "_") %in% colnames(state.df.prop))) # comprobamos los nuevos nombres
+stopifnot(round(aniadeProporciones(state.df)["Virginia", "Income_prop"], 2) == 1.52)
+```
+
+<!-- #region deletable=false editable=false nbgrader={"cell_type": "markdown", "checksum": "ae89376aa3d279b983934a43359638aa", "grade": false, "grade_id": "cell-d36fe7d577ef57ff", "locked": true, "schema_version": 3, "solution": false, "task": false} -->
+### No está permitido usar ningún paquete adicional en este ejercicio
+
+**Ejercicio 3 (2 puntos).** Con la variable `state.df` definida anteriormente:
+
+- Reemplazar los nombres de filas existentes por los indicados en la variable `state.abb` que ya viene definida en R (abreviaturas de los nombres de estados) y almacenar el resultado en la variable `state.df.abb`. Recuerda que la última fila  debe seguir llamándose `Minimos` puesto que no es el nombre de ningún estado. Recuerda que la longitud de `state.abb` es uno menos que el número de filas de `state.df`.
+
+- Añadir a `state.df.abb` una nueva columna `Division` (D mayúscula), que sea de tipo **factor** y cuyo contenido sea el contenido de la variable `division` que puedes encontrar creada a continuación. Dicha variable se ha creado añadiendo un NA (que corresponderá a la fila `Minimos`) al contenido de la variable `state.division`, que ya viene definida en R y contiene una agrupación por zonas de los estados de EEUU.
+
+- Utilizando la función `tapply` con la variable `Division` como agrupadora y la variable numérica `Income` (ingresos de ese estado) como objetivo, calcular el **ingreso máximo en cada zona de EEUU** y almacenar el resultado en la variable `income.zonas`. Tendrás que pasar como argumento para `tapply` la función `max` además del argumento adicional `na.rm = TRUE`. Tras la operación, `income.zonas` será un vector numérico con nombres, donde el nombre de cada posición coincide con la división (zona) a la que corresponde ese valor. 
+
+- Añadir a `state.df.abb` una nueva columna `Division.max.income` que tenga, para cada estado, el ingreso máximo de la división a la que pertenece ese estado. PISTA: aprovecha que `income.zonas` tiene nombres asignados a las posiciones, y utiliza dichos nombres para indexar sobre él. Puedes obtener el nombre al que pertenece cada estado gracias a la columna `Division`, la cual te servirá para indexar por nombre sobre `income.zonas`.
+
+- **Utilizando una sola llamada a la función `subset`**, seleccionar las filas de `state.df.abb` correspondientes a estados con un ingreso (columna `Income`) *menor* que el 80 % del ingreso máximo de esa división (columna `Division.max.income`). Para dichas filas seleccionar solamente las columnas `Population`, `Life Exp`, `Division.max.income` y `Income`. Recuerda envolver entre \`\` (una tilde grave a cada lado) los nombres de columna que tengan espacios. Guardar el resultado en la variable `state.df.poor`.
+<!-- #endregion -->
+
+```{r deletable=FALSE, nbgrader="{'cell_type': 'code', 'checksum': 'ca23719432cbde0fa4ec33f1de8896bc', 'grade': False, 'grade_id': 'ej3-respuesta', 'locked': False, 'schema_version': 3, 'solution': True, 'task': False}"}
+# NO MODIFICAR ESTA LINEA ej3-respuesta
+rownames(state.df)[1:50]= state.abb
+state.df.abb = state.df
+division = factor(c(as.character(state.division), NA))
+state.df.abb[,'Division']= division
+income.zonas = tapply(state.df.abb$Income, INDEX= state.df.abb$Division, FUN= max, na.rm=TRUE )
+state.df.abb[,'Division.max.income']= income.zonas[state.df.abb$Division]
+
+state.df.poor = subset(state.df.abb, 
+       subset= state.df.abb$Income < 0.8*state.df.abb$Division.max.income,
+       select= c('Population','Life Exp', 'Division.max.income', 'Income'))
+
+# FIN SOLUCION
+# Ejecuta las lineas siguientes para comprobar si tu solucion es correcta:
+```
+
+```{r deletable=FALSE, editable=FALSE, nbgrader="{'cell_type': 'code', 'checksum': 'a18ab0f2943672f07ce585ddbcd86b54', 'grade': True, 'grade_id': 'ej3-test', 'locked': True, 'points': 3, 'schema_version': 3, 'solution': False, 'task': False}"}
+stopifnot(all(rownames(state.df)[1:50] == state.abb))
+stopifnot(all(state.df.abb[["Division"]][1:50] == division[1:50]))
+stopifnot(round(mean(income.zonas), 2) == 5061.22)
+stopifnot(mean(state.df.abb$Division.max.income - state.df.abb[["Income"]], na.rm = T) == 686.96)
+stopifnot(is.data.frame(state.df.poor))
+stopifnot(nrow(state.df.poor) == 12 & ncol(state.df.poor) == 4)
+stopifnot(round(mean(state.df.poor[["Income"]]), 2) == 4087.33)
+stopifnot(round(mean(state.df.poor$`Life Exp`, na.rm = T), 2) == 70.81)
+```
+
+<!-- #region deletable=false editable=false nbgrader={"cell_type": "markdown", "checksum": "45e3178031c19380df168a5532a473ab", "grade": false, "grade_id": "cell-be1bb1bb6a445cfc", "locked": true, "schema_version": 3, "solution": false, "task": false} -->
+### Este ejercicio completo debe hacerse obligatoriamente con el paquete `dplyr` con el operador %>%.
+
+**Ejercicio 4 (3 puntos).** Contestar a las siguentes cuestiones acerca del dataframe `iris`, ya definido en R, guardando el resultado de cada una en la variable correspondiente a cada apartado definida más abajo. Cada cuestión debe responderse en una sola línea de código y sin variables auxiliares. Todos los apartados deben usar funciones de `dplyr` obligatoriamente. Resuelve todo el ejercicio dentro de la función indicada, que es necesaria por motivos logísticos para la corrección.
+
+1. Seleccionar las tres primeras columnas del dataset usando sus nombres de columna uno por uno.
+2. Seleccionar todas las columnas del dataset iris excepto “Petal Width”.
+3. Seleccionar todas las columnas del datdaset iris que empiecen por “P”.
+4. Reemplazar, usando `case_when`, todos los valores de Petal.Width mayores que 2 por NA. **IMPORTANTE**: utiliza `NA_real_` en lugar de `NA`.
+5. Quedarse solo con las filas en las que Sepal.Length >= 4.6 y Petal.Width >= 0.5.
+6. Ordenar el dataset iris ascendentemente por Sepal.Width y en caso de empate, descendemente por Sepal.Length.
+7. Crear una nueva columna llamada `proporcion` que sea el cociente de Sepal.Length entre Sepal.Width.
+
+<!-- #endregion -->
+
+```{r deletable=FALSE, nbgrader="{'cell_type': 'code', 'checksum': 'fdce3be7926f1ca0090e1e756eca4bda', 'grade': False, 'grade_id': 'ej4-respuesta', 'locked': False, 'schema_version': 3, 'solution': True, 'task': False}"}
+# NO MODIFICAR ESTA LINEA ej4-respuesta
+library(dplyr)
+
+# No cambies el nombre de la función. Recuerda usar el operador %>% en TODOS los apartados
+ejercicio4 <- function(iris){
+    
+    resultado.apartado1 = iris %>% select(Sepal.Length, Sepal.Width, Petal.Length)
+    resultado.apartado2 = iris %>% select(-Petal.Width)
+    resultado.apartado3 = iris %>% select(starts_with('P'))
+    resultado.apartado4 = iris %>% mutate(Petal.Width= case_when(Petal.Width > 2 ~ NA_real_, TRUE ~ Petal.Width))
+    resultado.apartado5 = iris %>% select(Sepal.Length, Petal.Width) %>% filter((Sepal.Length>=4.6)&(Petal.Width >= 0.5))
+    resultado.apartado6 = iris%>% arrange(Sepal.Width, desc(Sepal.Length))
+    resultado.apartado7 = iris %>% mutate(proporcion = Sepal.Length/Sepal.Width)
+    
+    # No modifiques esta linea
+    list(resultado.apartado1, 
+         resultado.apartado2, 
+         resultado.apartado3, 
+         resultado.apartado4,
+         resultado.apartado5,
+         resultado.apartado6,
+         resultado.apartado7)
+}
+
+# Para tus pruebas, invocamos a la función y mostramos por pantalla cada resultado con la función head()
+lista.resultados = ejercicio4(iris)
+
+resultado1 = lista.resultados[[1]]
+resultado2 = lista.resultados[[2]]
+resultado3 = lista.resultados[[3]]
+resultado4 = lista.resultados[[4]]
+resultado5 = lista.resultados[[5]]
+resultado6 = lista.resultados[[6]]
+resultado7 = lista.resultados[[7]]
+
+# Descomenta estas líneas para visualizar cada resultado
+head(resultado1)
+head(resultado2)
+head(resultado3)
+head(resultado4)
+head(resultado5)
+head(resultado6)
+head(resultado7)
+
+# FIN SOLUCION
+# Ejecuta las lineas siguientes para comprobar si tu solucion es correcta:
+```
+
+```{r deletable=FALSE, editable=FALSE, nbgrader="{'cell_type': 'code', 'checksum': '2ffe66c43d8b56028c7fa9b1b75e4638', 'grade': True, 'grade_id': 'ej4-test', 'locked': True, 'points': 1.5, 'schema_version': 3, 'solution': False, 'task': False}"}
+lista = ejercicio4(iris)
+lineas = deparse(ejercicio4)
+stopifnot(all(colnames(lista[[1]]) == c("Sepal.Length", "Sepal.Width", "Petal.Length")))
+stopifnot(all(colnames(lista[[2]]) == c("Sepal.Length", "Sepal.Width", "Petal.Length", "Species")))
+stopifnot(all(colnames(lista[[3]]) == c("Petal.Length", "Petal.Width")))
+stopifnot(sum(grepl("resultado.apartado3", lineas) & grepl("\"P\"", lineas)) > 0)
+stopifnot(sum(is.na(lista[[4]])) == 23)
+stopifnot(sum(grepl("resultado.apartado4", lineas) & grepl("mutate", lineas)) > 0)
+stopifnot(nrow(lista[[5]]) == 102)
+stopifnot(lista[[6]]$Sepal.Length[1] == 5.0 & lista[[6]]$Sepal.Width[1] == 2.0)
+stopifnot(round(mean(lista[[7]]$proporcion), 2) == 1.95)
+
+# Comprobar que todos los apartados se han resuelto utilizando %>%
+stopifnot(sum(grepl("resultado.apartado1", lineas) & grepl("%>%", lineas)) > 0)
+stopifnot(sum(grepl("resultado.apartado2", lineas) & grepl("%>%", lineas)) > 0)
+stopifnot(sum(grepl("resultado.apartado3", lineas) & grepl("%>%", lineas)) > 0)
+stopifnot(sum(grepl("resultado.apartado4", lineas) & grepl("%>%", lineas)) > 0)
+stopifnot(sum(grepl("resultado.apartado5", lineas) & grepl("%>%", lineas)) > 0)
+stopifnot(sum(grepl("resultado.apartado6", lineas) & grepl("%>%", lineas)) > 0)
+stopifnot(sum(grepl("resultado.apartado7", lineas) & grepl("%>%", lineas)) > 0)
+```
+
+<!-- #region deletable=false editable=false nbgrader={"cell_type": "markdown", "checksum": "0f57b226a18b13386102c0cdd1becf10", "grade": false, "grade_id": "cell-0fdeacdd87583131", "locked": true, "schema_version": 3, "solution": false, "task": false} -->
+### Este ejercicio completo debe hacerse obligatoriamente con el paquete `dplyr` con operador %>%.
+
+**Ejercicio 5 (1 punto).** Repetir el apartado 5 del ejercicio anterior **creando una función `filtrarSepalLengthPetalWidth`** a la que le pasemos como primer argumento un dataframe (que siempre será el de iris, pero dentro de la función **no se puede hacer referencia a la variable iris** sino al df pasado como argumento) y los dos argumentos siguientes serán los umbrales de Sepal.Length y de Petal.Width. Después de crearla, invocarla utilizando el operador pipe tal como se indica en el código de ejemplo, y almacenar el resultado en la variable `df.filtrado`.
+<!-- #endregion -->
+
+```{r deletable=FALSE, nbgrader="{'cell_type': 'code', 'checksum': '436c90c2c7cf720f460111cbe4ce2c3c', 'grade': False, 'grade_id': 'ej5-respuesta', 'locked': False, 'schema_version': 3, 'solution': True, 'task': False}"}
+# NO MODIFICAR ESTA LINEA ej5-respuesta
+filtrarSepalLengthPetalWidth <- function(df, umbralSepalLength, umbralPetalWidth){
+  return( df%>%
+    select(Sepal.Length, Petal.Width)%>%
+    filter((Sepal.Length >= umbralSepalLength) & (Petal.Width >= umbralPetalWidth)))
+}
+df.filtrado = iris %>% filtrarSepalLengthPetalWidth(4.6, 0.5)
+# FIN SOLUCION
+# Ejecuta las lineas siguientes para comprobar si tu solucion es correcta:
+```
+
+```{r deletable=FALSE, editable=FALSE, nbgrader="{'cell_type': 'code', 'checksum': '7d7a3a417c0bff54a73b2221af660d96', 'grade': True, 'grade_id': 'ej5-test', 'locked': True, 'points': 1, 'schema_version': 3, 'solution': False, 'task': False}"}
+lineasFiltrar = deparse(filtrarSepalLengthPetalWidth)
+df.filtrado = iris %>% filtrarSepalLengthPetalWidth(4.6, 0.5)
+stopifnot(!any(grepl("iris", lineasFiltrar))) # no puede aparecer la variable iris en el cuerpo de la función
+stopifnot(any(grepl("%>%", lineasFiltrar))) # no puede aparecer la variable iris en el cuerpo de la función
+stopifnot(nrow(df.filtrado) == 102)
+```

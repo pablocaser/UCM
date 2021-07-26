@@ -1,0 +1,169 @@
+---
+jupyter:
+  jupytext:
+    text_representation:
+      extension: .Rmd
+      format_name: rmarkdown
+      format_version: '1.2'
+      jupytext_version: 1.5.2
+  kernelspec:
+    display_name: R
+    language: R
+    name: ir
+---
+
+<!-- #region deletable=false editable=false nbgrader={"cell_type": "markdown", "checksum": "9391b5650373c2b9c852b7ab8148858c", "grade": false, "grade_id": "cell-bd0b11511d1e9d9c", "locked": true, "schema_version": 3, "solution": false, "task": false} -->
+# Relación de ejercicios 1
+
+Existen 5 estructuras de datos básicas en R: vector, matriz, array, lista y dataframe. Pueden ser unidimensionales (vector y lista), bidimensionales (matriz y data frame) o multidimensionales (array). Se diferencian también en la homogeneidad de los elementos que pueden almacenar: mientras que en el caso de las matrices, vectores y arrays todos los elementos deben ser del mismo tipo, las listas y los data frames pueden almacenar elementos de múltiples tipos distintos.
+
+En estos ejercicios practicaremos la conversión de tipos y algunas operaciones básicas.
+<!-- #endregion -->
+
+<!-- #region deletable=false editable=false nbgrader={"cell_type": "markdown", "checksum": "e12183ace23390d993386478c68e163d", "grade": false, "grade_id": "cell-6931830012e6c23e", "locked": true, "schema_version": 3, "solution": false, "task": false} -->
+**INSTRUCCIONES**: en cada trozo de código debes responder a la pregunta formulada, asegurándote de que el resultado queda guardado en la(s) variable(s) que por defecto vienen inicializadas a `NULL`. No se necesita usar variables intermedias, pero puedes hacerlo siempre que el resultado final del cálculo quede guardado exactamente en la variable que venía inicializada a NULL (debes reemplazar None por la secuencia de transformaciones necesarias, pero nunca cambiar el nombre de esa variable). **El código de tu solución puede ocupar tantas líneas como necesites, pero deben estar situadas entre la línea "NO MODIFICAR ESTA LÍNEA ..." y la línea "FIN SOLUCION". Ninguna de esas dos líneas debe ser modificada bajo ningún concepto.** En caso contrario tu solución no será puntuada.
+
+Después de cada ejercicio verás varias líneas de código ya hechas. Ejecútalas todas (no modifiques su código) y te dirán si tu solución es correcta o no. Si la solución es correcta, no se mostrará nada, pero si es incorrecta, verás un error indicando cuál es el test que tu solución no pasa. Además de esas pruebas, se realizarán algunas más (ocultas) a la hora de puntuar el ejercicio, pero si tu código pasa con éxito las líneas que ves, puedes estar bastante seguro de que tu solución es correcta. Asegúrate de que, al menos, todas las comprobaciones indican que tu solución es correcta antes de subir el ejercicio a la plataforma.
+
+Una vez finalizada la actividad, guarda tu fichero en RStudio, después ciérralo, vuélvelo a abrir y ejecútalo completo, y asegúrate de que no se lanza ningún error. De esta manera comprobarás que no has olvidado nada y que es posible ejecutarlo completo desde 0 y sin errores. **No se corregirá ningún fichero que tenga errores de sintaxis y no se pueda ejecutar completo**. No pasa nada si alguna de las comprobaciones lanza errores por ser incorrecta, pero el código de la solución de cada ejercicio no puede tener errores de sintaxis. Es lo mínimo que se debe exigir.
+
+**RECUERDA SUBIR CADA UNO DE LOS FICHEROS .R TAL CUAL (sueltos), SIN COMPRIMIR Y SIN CAMBIARLES EL NOMBRE. NO SUBAS NADA MÁS QUE LOS FICHEROS .R (no subas ningún PDF, ni ningún fichero ZIP ni similar)**. La plataforma ya los separa automáticamente en carpetas con vuestro nombre completo, por lo que no es necesario que se lo pongas al fichero.
+<!-- #endregion -->
+
+<!-- #region deletable=false editable=false nbgrader={"cell_type": "markdown", "checksum": "14cb11a9f32e46de38a17250ad2f88dd", "grade": false, "grade_id": "cell-42564346aa5f4ad2", "locked": true, "schema_version": 3, "solution": false, "task": false} -->
+**Ejercicio 1 (1 punto).** Crear un vector llamado `v` que contenga 15 números reales aleatorios distribuidos según una distribución normal con media 1 y desviación típica 1. PISTA: utiliza la función `rnorm` indicando el número de aleatorios que hay que generar, y los parámetros `mean = 1, sd = 1`.
+<!-- #endregion -->
+
+```{r deletable=FALSE, nbgrader="{'cell_type': 'code', 'checksum': '95003cb7a5900027c192e7d81a822b02', 'grade': False, 'grade_id': 'ej1-respuesta', 'locked': False, 'schema_version': 3, 'solution': True, 'task': False}"}
+# NO MODIFICAR ESTA LINEA ej1-respuesta
+set.seed(123) # mantener esto para fijar la semilla al 123
+v = as.double(c(rnorm(15,mean=1, sd=1)))
+# FIN SOLUCION
+# Ejecuta las lineas siguientes para comprobar si tu solucion es correcta:
+```
+
+```{r deletable=FALSE, editable=FALSE, nbgrader="{'cell_type': 'code', 'checksum': '9acda93a4eaed46a3724df91a2cb3b49', 'grade': True, 'grade_id': 'ej1-test', 'locked': True, 'points': 1, 'schema_version': 3, 'solution': False, 'task': False}"}
+stopifnot(length(v) == 15)
+stopifnot(round(v[1], 2) == 0.44)
+stopifnot(round(mean(v), 2) == 1.15)
+```
+
+<!-- #region deletable=false editable=false nbgrader={"cell_type": "markdown", "checksum": "0f07f9b0567528fdf0ea481bf4a98869", "grade": false, "grade_id": "cell-9fd328c340860990", "locked": true, "schema_version": 3, "solution": false, "task": false} -->
+**Ejercicio 2 (1 punto).** Crear una matriz bidimensional 5x5 llamada `m` con los enteros mayores que 10 de 3 en 3, puestos *por filas*. Es decir, la primera fila debe ser (11, 14, 17, 20, 23). PISTA: utiliza la función `seq` pasándole los argumentos `by` y `length.out`.
+<!-- #endregion -->
+
+```{r deletable=FALSE, nbgrader="{'cell_type': 'code', 'checksum': '9673b60791ca9cf2199db92180407ead', 'grade': False, 'grade_id': 'ej2-respuesta', 'locked': False, 'schema_version': 3, 'solution': True, 'task': False}"}
+# NO MODIFICAR ESTA LINEA ej2-respuesta
+m = matrix(seq(11,by=3, 83), nrow=5, ncol=5, byrow = TRUE)
+# FIN SOLUCION
+# Ejecuta las lineas siguientes para comprobar si tu solucion es correcta:
+```
+
+```{r deletable=FALSE, editable=FALSE, nbgrader="{'cell_type': 'code', 'checksum': 'f090fa6855234d41d9a4abbd5c1eb19c', 'grade': True, 'grade_id': 'ej2-test', 'locked': True, 'points': 1, 'schema_version': 3, 'solution': False, 'task': False}"}
+stopifnot(nrow(m) == 5 & ncol(m) == 5)
+stopifnot(m[1,] == c(11, 14, 17, 20, 23) && m[,1] == c(11, 26, 41, 56, 61))
+```
+
+<!-- #region deletable=false editable=false nbgrader={"cell_type": "markdown", "checksum": "1ca1cfac0e5941d4f8d3bf72b7c488d8", "grade": false, "grade_id": "cell-d36fe7d577ef57ff", "locked": true, "schema_version": 3, "solution": false, "task": false} -->
+**Ejercicio 3 (3 puntos).** Utilizando la variable `month.name` que ya viene definida en R:
+
+- Crear una máscara (vector de booleanos) de aquellos meses que **no** terminan en **ber** y guardarla en la variable `mask.ber`. PISTA: utiliza la función de R `endsWith(vector, cadena)` que está vectorizada, pasando `month.name` como primer argumento y la cadena `"ber"` como segundo argumento. Te devolverá directamente un vector de TRUE/FALSE con cuatro elementos a TRUE, y tendrás que *negarlo* poniendo una `!` delante de la invocación a la función.
+- Crear otra máscara (vector de booleanos) de aquellos meses que **no** empiezan por `J` y guardarla en la variable `mask.j`. PISTA: utiliza la función de R `startsWith(vector, cadena)` que está vectorizada, pasando `month.name` como primer argumento y la cadena `"J"` como segundo argumento. Te devolverá directamente un vector de TRUE/FALSE con tres elementos a TRUE, y tendrás que *negarlo* poniendo una `!` delante de la invocación a la función.
+- Usando la máscara anterior, crear una **lista** llamada `s` cuyos elementos sean los del subvector de `month.name` formado por aquellos meses que **no** terminan en ber **ni tampoco** empiezan por J, usando una nueva máscara que sea la concatenación  mediante `&` de las dos máscaras anteriores.  **OJO:** al aplicar la máscara a `month.name` obtendrás como resultado un vector, pero el ejercicio pide una lista. Una vez obtenido el subvector adecuado, no olvides convertirlo a lista con la función `as.list` a la que debes pasarle como argumento dicho subvector. **Se pide una lista de 4 elementos, no una lista de 1 solo elemento el cual sea un vector de 4 elementos**.
+<!-- #endregion -->
+
+```{r deletable=FALSE, nbgrader="{'cell_type': 'code', 'checksum': 'ab26251d5ca797ba83dcb09547e40f85', 'grade': False, 'grade_id': 'ej3-respuesta', 'locked': False, 'schema_version': 3, 'solution': True, 'task': False}"}
+# NO MODIFICAR ESTA LINEA ej3-respuesta
+mask.ber = !endsWith(month.name, "ber")
+mask.j = !startsWith(month.name, "J")
+month.name[mask.ber & mask.j] = as.list(month.name[mask.ber & mask.j])
+s = month.name[mask.ber & mask.j]
+# FIN SOLUCION
+# Ejecuta las lineas siguientes para comprobar si tu solucion es correcta:
+```
+
+```{r deletable=FALSE, editable=FALSE, nbgrader="{'cell_type': 'code', 'checksum': '0a38d05c249244354adcabf8bc51be6a', 'grade': True, 'grade_id': 'ej3-test', 'locked': True, 'points': 3, 'schema_version': 3, 'solution': False, 'task': False}"}
+tv = 1:length(month.name)
+names(tv) = month.name
+stopifnot(sum(mask.ber) == 8)
+stopifnot(sum(mask.j) == 9)
+stopifnot(is.list(s))
+stopifnot(length(s) == 5)
+stopifnot(round(mean(tv[unlist(s)]),2) == 4.4)
+```
+
+<!-- #region deletable=false editable=false nbgrader={"cell_type": "markdown", "checksum": "2ae333010ee2bc81bbf81e90801896d6", "grade": false, "grade_id": "cell-be1bb1bb6a445cfc", "locked": true, "schema_version": 3, "solution": false, "task": false} -->
+**Ejercicio 4 (1 punto).** Contestar a las siguentes cuestiones:
+
+- Crear una lista llamada 'lista' y poner en ella, por ese orden, los tres objetos `v`, `m` y `s` creados en los apartados anteriores. Los nombres de las posiciones de la lista deben ser `xx`, `yy` y `zz` respectivamente. **No es correcto volver a crear los objetos anteriores**, sino que debe crearse la lista a partir de los objetos ya existentes.
+- Calcular el número de elementos de la lista y guardarlo en la variable `tam` (sin contar los elementos internos que cada posición almacena).
+<!-- #endregion -->
+
+```{r deletable=FALSE, nbgrader="{'cell_type': 'code', 'checksum': '10f768a8ff4f60f2cd20ee7fe5350a78', 'grade': False, 'grade_id': 'ej4-respuesta', 'locked': False, 'schema_version': 3, 'solution': True, 'task': False}"}
+# NO MODIFICAR ESTA LINEA ej4-respuesta
+lista = list(xx=v, yy=m, zz=s)
+tam = length(lista)
+# FIN SOLUCION
+# Ejecuta las lineas siguientes para comprobar si tu solucion es correcta:
+```
+
+```{r deletable=FALSE, editable=FALSE, nbgrader="{'cell_type': 'code', 'checksum': '5b13d00bc393e42d99a343dfe86f8853', 'grade': True, 'grade_id': 'ej4-test', 'locked': True, 'points': 1, 'schema_version': 3, 'solution': False, 'task': False}"}
+stopifnot(length(lista) == 3)
+stopifnot(tam == 3)
+stopifnot(sum(names(lista) == c("xx", "yy", "zz")) == 3)
+address = function(x) substring(capture.output(.Internal(inspect(x)))[1],2,17)
+stopifnot(address(lista$xx) == address(v))
+stopifnot(address(lista$yy) == address(m))
+stopifnot(address(lista$zz) == address(s))
+```
+
+**Ejercicio 5 (2 puntos).** Contestar a las siguientes cuestiones:
+
+- Ahora sí, contar el número de elementos que tiene cada posición de la lista mediante la función `sapply` y guardar el resultado devuelto en la variable `tam.interior`. PISTA: se puede saber la longitud de un objeto mediante la función `length`
+- Una vez hecho el recuento anterior, reemplazar el elemento `yy` de la lista por el *máximo* de los elementos de la matriz que hay almacenada en esa posición. PISTA: puedes utilizar la función `max` que está vectorizada y por tanto puede aplicarse a un vector o a una matriz. **IMPORTANTE**: la modificación se hace sobre la propia variable `lista`. Por eso no hace falta crear más variables ni tampoco es correcto volver a crear la lista. **No está permitido utilizar la variable `s` que habíamos creado antes de crear la lista**.
+- Por último, borrar el elemento `zz` de la lista asignándole `NULL`. No está permitido volver a crear la lista.
+
+```{r deletable=FALSE, nbgrader="{'cell_type': 'code', 'checksum': '98069676e9f32ff08d47b9185ef18932', 'grade': False, 'grade_id': 'ej5-respuesta', 'locked': False, 'schema_version': 3, 'solution': True, 'task': False}"}
+# NO MODIFICAR ESTA LINEA ej5-respuesta
+tam.interior = sapply(lista, length)
+lista$yy= max(lista$yy)
+lista$zz= NULL
+# FIN SOLUCION
+# Ejecuta las lineas siguientes para comprobar si tu solucion es correcta:
+```
+
+```{r deletable=FALSE, editable=FALSE, nbgrader="{'cell_type': 'code', 'checksum': 'b6bfe3a4602bc02159ce344096e69406', 'grade': True, 'grade_id': 'ej5-test', 'locked': True, 'points': 2, 'schema_version': 3, 'solution': False, 'task': False}"}
+stopifnot(length(tam.interior) == 3 && sum(tam.interior) == 45)
+stopifnot(lista$yy == 83)
+stopifnot(length(lista) == 2)
+```
+
+<!-- #region deletable=false editable=false nbgrader={"cell_type": "markdown", "checksum": "5c8906aadda003ae2369cab42a9a819a", "grade": false, "grade_id": "cell-b59b4c0a967b6fc1", "locked": true, "schema_version": 3, "solution": false, "task": false} -->
+**Ejercicio 6 (2 puntos).** Extraer el elemento `xx` de la lista y guardarlo en una nueva variable llamada `x2`. **No es correcto volver a crear la variable xx** sino que debe ser extraída de `lista`. No está permitido usar índices numéricos. A continuación:
+
+- Guardar en la variable `menores02` una máscara booleana que indique las casillas de `x2` cuyo valor es menor que 0.2.
+- Guardar en la variable `mayores04` una máscara booleana que indique las casillas de `x2` cuyo valor es mayor que 0.4.
+- Usando las dos máscaras anteriores, crear una nueva variable llamada `menores02.mayores04` y asignarle la máscara booleana que indique las casillas que cumplen cualquiera de las dos condiciones anteriores. Recuerda que el `.` es simplemente una manera de separar palabras cuando queremos crear variables cuyo nombre tiene varias palabras, de manera similar al carácter `_` que se suele usar en otros lenguajes de programación.
+- Aplicar la máscara `menores02.mayores04` al vector `x2` y almacenar el resultado en la variable `x3`.
+<!-- #endregion -->
+
+```{r deletable=FALSE, nbgrader="{'cell_type': 'code', 'checksum': 'b582392a223ceb5ce8c1fc67afa69e46', 'grade': False, 'grade_id': 'ej6-respuesta', 'locked': False, 'schema_version': 3, 'solution': True, 'task': False}"}
+# NO MODIFICAR ESTA LINEA ej6-respuesta
+x2 = lista$xx
+menores02= x2<0.2
+mayores04= x2>0.4
+menores02.mayores04= menores02 | mayores04
+x3 = x2[menores02.mayores04]
+# FIN SOLUCION
+# Ejecuta las lineas siguientes para comprobar si tu solucion es correcta:
+```
+
+```{r deletable=FALSE, editable=FALSE, nbgrader="{'cell_type': 'code', 'checksum': 'ddbe43d39674e2e9ed16479ef00e6665', 'grade': True, 'grade_id': 'ej6-test', 'locked': True, 'points': 2, 'schema_version': 3, 'solution': False, 'task': False}"}
+address = function(x) substring(capture.output(.Internal(inspect(x)))[1],2,17)
+stopifnot(address(x2) == address(lista$xx))
+stopifnot(length(menores02) == 15)
+stopifnot(length(mayores04) == 15)
+stopifnot(sum(menores02) == 1)
+stopifnot(sum(mayores04) == 13)
+stopifnot(length(x3) == 14 && round(mean(x3), 2) == 1.21)
+```
