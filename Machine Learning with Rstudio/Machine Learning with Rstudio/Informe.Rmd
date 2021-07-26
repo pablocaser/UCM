@@ -1,0 +1,252 @@
+---
+title: "Pump it Up - Driven Data - Machine Learning - R"
+author: Pablo Abad Aparicio, Pablo María Casero Palmero, Alvaro Lozano Alonso y Mario
+  Muriel Maillo.
+date: "08/03/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_chunk$set(cache = TRUE)
+knitr::opts_chunk$set(warning = FALSE)
+knitr::opts_chunk$set(eval = FALSE)
+```
+
+## Resumen
+El resultado obtenido con el código aquí descrito da un score de 0.8254 si es ejecutado en macOS. En windows, con su semilla correspondiente se obtiene un score de 0.8258. 
+
+A lo largo del proceso se han desarrollado muy diversas pruebas con el objetivo de aumentar el poder predictivo del modelo. Algunas con más éxito que otras. En este documento se detallan aquellas que produjeron mejoras en el modelo y otras que hicieron empeorar el modelo. Éstas últimas, no se ejecutan, pero se explican como evidencia del esfuerzo realizado. 
+
+Los elementos clave que nos llevado a conseguir este score han sido:
+
+- Realizar transformaciones en las columnas categóricas para tratarlas como frecuencias.
+- Explotación de la variable date_recorded en días, meses y años.
+- Conversión a dummies de las variables water_quality y quantity.
+- Tansformación de region_code y district_code a categóricas para que el modelo no las detecte como ordinales.
+
+### Librerías
+```{r, message = FALSE, eval = TRUE}
+require(dplyr)
+require(lubridate)
+require(fastDummies)
+require(ranger)
+require(data.table)
+require(tidyverse)
+require(tidyr)
+library(inspectdf) 
+require(VIM)
+require(DMwR)
+```
+
+### Ingesta de datos iniciales  
+Se descarga el conjunto de datos y se guarda en las variables `myTrain`, `myTest` y `myLabel`.  
+Por reproducibilidad, se descargan los archivos directamente de la página web de la competición.  
+Si se rompen los links, pueden ser extraídos de:   https://www.drivendata.org/competitions/7/pump-it-up-data-mining-the-water-table/data/
+```{r, eval = TRUE}
+myTrain <- fread("https://drivendata-prod.s3.amazonaws.com/data/7/public/4910797b-ee55-40a7-8668-10efd5c1b960.csv?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Credential=AKIARVBOBDCYVI2LMPSY%2F20210308%2Fus-east-1%2Fs3%2Faws4_request&X-Amz-Date=20210308T103821Z&X-Amz-Expires=86400&X-Amz-SignedHeaders=host&X-Amz-Signature=740b7d7693bfd474f1935dacf746fdb11be7d08162f00bcb5c958b2a34ecb59d")
+myTest <- fread("https://drivendata-prod.s3.amazonaws.com/data/7/public/702ddfc5-68cd-4d1d-a0de-f5f566f76d91.csv?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Credential=AKIARVBOBDCYVI2LMPSY%2F20210308%2Fus-east-1%2Fs3%2Faws4_request&X-Amz-Date=20210308T103821Z&X-Amz-Expires=86400&X-Amz-SignedHeaders=host&X-Amz-Signature=3ad61ed76f9d8fa85a491f52ff6e4cebfa6edb4fa2b2727b8b957ae680593125")
+label <- fread("https://drivendata-prod.s3.amazonaws.com/data/7/public/0bf8bc6e-30d0-4c50-956a-603fc693d966.csv?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Credential=AKIARVBOBDCYVI2LMPSY%2F20210308%2Fus-east-1%2Fs3%2Faws4_request&X-Amz-Date=20210308T103821Z&X-Amz-Expires=86400&X-Amz-SignedHeaders=host&X-Amz-Signature=a8296b095d8fc253475685729305af2e15b75af2d0e190b39f31bb3d80f07841")
+```
+### Exploratory Data Analysis.
+A continuación se muestra el análisis exploratorio de las variables del conjunto original. 
+
+Composición de variables categóricas.
+```{r, eval = TRUE}
+x <- inspect_cat(myTrain) 
+show_plot(x)
+```
+
+Correlación entre variables numéricas con intervalos de confianza.
+```{r, eval = TRUE}
+x <- inspect_cor(myTrain)
+show_plot(x)
+```
+
+Categoría más frecuente para las variables categóricas.
+```{r, eval = TRUE}
+x <- inspect_imb(myTrain)
+show_plot(x)
+```
+
+Uso de memoria por cada variable.
+```{r, eval = TRUE}
+x <- inspect_mem(myTrain)
+show_plot(x)
+```
+
+NAs por variables.
+```{r, eval = TRUE}
+x <- inspect_na(myTrain)
+show_plot(x)
+```
+
+Histograma para las variables numéricas.
+```{r, eval = TRUE}
+x <- inspect_num(myTrain)
+show_plot(x)
+```
+
+Tipos de variables.
+```{r, eval = TRUE}
+x <- inspect_types(myTrain)
+show_plot(x)
+```
+
+### Preprocesado. Tratamiento de NA y unión de conjuntos.
+Se combinan los conjuntos de `myTrain` y `myLabel` mediante la variable `id` en `myTrain` y luego se crea una nueva variable `myTrainTest` combinando `myTrain` con `myTest`, exluyendo la variable objetivo del primer conjunto.
+```{r}
+# fread lee los espacios en blanco como NA, por lo que hay que reemplazarlos manualmente.
+myTrain$permit[is.na(myTrain$permit)] <- ""
+myTrain$public_meeting[is.na(myTrain$public_meeting)] <- ""
+myTest$permit[is.na(myTest$permit)] <- ""
+myTest$public_meeting[is.na(myTest$public_meeting)] <- ""
+
+# Anexamos la variable objetivo al conjunto de train mediante su "id".
+myTrain <- left_join(myTrain, label, by = "id")
+
+# Guardamos la variable objetivo para más tarde.
+myVarObj <- myTrain$status_group
+
+# Unimos los conjuntos de entrenamiento y test para asegurarnos que aplicamos las mismas transformaciones a ambos.
+myTrainTest <- myTrain %>%
+                  select(-status_group) %>%
+                     bind_rows(myTest)
+```
+
+### Feature Engineering  
+Se crean nuevas variables a partir de otras, así como se modifican algunas existentes para intentar sacarles un mayor rendimiento.  
+
+Extraemos valor de la variable `date_recorded` puesto que la variable con formato fecha no tiene potencial.
+```{r}
+ref_date <- max(ymd(myTrainTest$date_recorded))
+myTrainTest$day_count <- as.numeric(ref_date - ymd(myTrainTest$date_recorded))
+```
+
+Modificamos las variables `region_code` y `district_code` a categóricas para que el modelo no cree correlaciones de una variable que no debería ser numérica.
+```{r}
+myTrainTest$region_code <- paste("RegCode", myTrainTest$region_code, sep = "_")
+myTrainTest$district_code <- paste("DistCode", myTrainTest$district_code, sep = "_")
+```
+
+Creamos las variables `month` y `year` por si la época del año o el mismo año en que se registró tiene alguna relación con el estado de las bombas.
+```{r}
+myTrainTest$month <- as.numeric(month(ymd(myTrainTest$date_recorded)))
+myTrainTest$year  <- as.numeric(year(ymd(myTrainTest$date_recorded)))
+```
+
+Convertimos la variable de `water_quality` a dummy.
+```{r}
+wq_dum <- dummy_cols(myTrainTest, select_columns = 'water_quality')
+wq_dum <- wq_dum[,44:51]
+colnames(wq_dum) <- c("wq1", "wq2", "wq3", "wq4", "wq5", "wq6", "wq7", "wq8")
+```
+
+Convertimos la variable `quantity` a dummy.
+```{r}
+quan_dum <- dummy_cols(myTrainTest, select_columns = 'quantity')
+quan_dum <- quan_dum[,44:48]
+colnames(quan_dum) <- c("q1", "q2", "q3", "q4", "q5")
+```
+
+Anexamos las columnas `wq_dum` y `quan_dum`. 
+```{r}
+myTrainTest <- cbind(myTrainTest, wq_dum)
+myTrainTest <- cbind(myTrainTest, quan_dum)
+myTrainTest <- as.data.table(myTrainTest)
+```
+
+Realizamos una transformación de variables para todas aquellas que son de tipo categórico. Se convierten sus valores a frecuencia, y aquellas con muy bajas frecuencia son reasignadas a un valor muy negativo para que el modelo las desprecie.
+```{r}
+# Convertimos todas las columnas de tipo character a tipo factor.
+myTrainTest <- myTrainTest %>% 
+                  mutate_if(is.character, as.factor)
+
+# Seleccionamos los nombres de las columnas que son factor.
+cfactor <- myTrainTest %>%
+              select_if(is.factor) %>%
+                  names()
+
+# Creamos un bucle que utiliza los nombres de las variables de tipo factor para anexar columnas de frecuencia para estas variables.
+for (i in 1:length(cfactor)) {
+        myTrainTest[, paste(cfactor[i], 'count', sep = '_') := as.numeric(.N), by = eval(cfactor[i])]
+}
+
+# Guardamos los nombres de las columnas que acabamos de crear en una variable.
+cCount <- myTrainTest %>%
+                select(contains("count")) %>%
+                        names()
+
+# Seteamos a -10000 aquellas observaciones cuya frecuencia es inferior a 5 para que el modelo no las considere relevantes.
+for (i in 1:length(cCount)) {
+        myTrainTest[get(cCount[i]) < 5 , c(cCount[i]) := -10000]
+}
+
+# Quitamos las columnas de tipo factor puesto que ya no nos sirven.
+myTrainTest <- myTrainTest %>%
+                        select_if(negate(is.factor))
+```
+
+### Transformaciones descartadas
+
+A continuación se explican otras transformaciones en el modelo con las que se intentó obtener un mayor poder predictivo, pero que no tuvieron éxito, por lo que fueron descartadas.
+
+- Se probó a buscar palabras frecuentes en `wpt_name` que tuviesen relación con `status_group`.
+- A la variable `water_quality` se le intentó dar un sentido lógico según el tipo de agua, de forma que se le pudiese asignar una variable numérica en lugar de categórica relacionado con lo dañino del tipo de agua para la conservación de las bombas. Finalmente se descartó porque no existía una correlación y no aportaba nada al modelo.
+- Se tramificó la variable `population` para intentar mejorar el modelo, pero se obtuvieron peores resultados.
+- Se probó a rellenar valores codificados como 0 en la variable `construction_year` a través de la variable `date_recorded` pero no se encontró un patrón que facilitase el codificado de ésta.
+- Asimismo, se tramificó la variable `payment` obteniendo el mismo resultado que con `population`.
+- En distintas fases de modelación se jugó permamentemente con la inclusión o eliminación de diversas variables, aunque finalmente el modelo con las variables aquí presentes dió el mejor resultado.
+
+### Particionado  
+Particionado de la variable `myTrainTest` en `train_num` y `test_num`.
+```{r}
+# Particionamos en train_num y asignamos le asignamos la variable objetivo.
+train_num   <- myTrainTest[1:nrow(myTrain),]
+train_num$myVarObj <- as.factor(myVarObj)
+
+# Parcicionamos asimismo el test_num.
+test_num    <- myTrainTest[(nrow(myTrain) + 1):nrow(myTrainTest),]
+```
+
+### Modelado y predicción  
+Modelado de random forest con Ranger.
+```{r, results = "hide"}
+# Semilla para reproducibilidad.
+set.seed(41)
+
+# Modelo Random Forest con Ranger.
+my_model <- ranger(
+        myVarObj ~.,
+        importance = "impurity",
+        num.trees = 1000,
+        mtry = 7,
+        data = train_num
+)
+```
+
+### Modelos descartados  
+A parte del modelo Random Forest de la librería `Ranger` se probaron otros librerías como `Caret` y otros modelos como XGBoost y XGBoost de H2O, pero ninguno dio mejor resultado que el RF de Ranger. 
+
+También se probaron diversos metodos de tuneado de hiperparámetros, como la función `tuneRF()`. Tras varias pruebas se determinó la configuración presente como la óptima. Otras funciones para grid search tuvieron que ser descartadas por falta de tiempo (ETA superior a 1 día).
+
+```{r}
+# Hacemos la predicción sobre test_num con el modelo.
+my_predict <- predict(my_model, data = test_num)
+pred_status_group <- my_predict$predictions
+
+# Creamos el data.frame para la submission.
+my_sub <- data.frame(id = test_num$id, status_group = pred_status_group)
+
+# Escribimos el data.frame para la submission en un .csv.
+fwrite(my_sub, "Modelo_MSF.csv")
+```
+
+### Posibles desarrollos futuros  
+
+Un posible desarrollo futuro sería por ejemplo incluir las siguientes lineas de código, utilizando la librería `geosphere` tal y como han hecho algunos compañeros.
+```{r}
+trainIn$dist <- distGeo(as.matrix(trainIn[,c('longitude','latitude')]), c(0,0))
+testOr$dist <- distGeo(as.matrix(testOr[,c('longitude','latitude')]), c(0,0))
+```
+
