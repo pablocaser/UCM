@@ -1,0 +1,347 @@
+---
+title: "Técnicas no Supervisadas"
+author: "Pablo María Casero Palmero"
+date: "8/12/2020"
+output: word_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(caret)
+library(lmSupport)
+library(xts)
+library(forecast)
+library(grid)
+library(gridExtra)
+library(ggplot2)
+library(corrplot)
+library(cramer)
+library(psych)
+library(questionr)
+library(car)
+library(purrr)
+library(VIM)
+library(lubridate)
+library(tibble)
+library(fpc)
+library(factoextra)
+library(ggpubr)
+
+# Carga de funciones
+source("Funciones_R.R")
+source("Funciones_Clust.R")
+paquetes(c("qgraph","devtools", "FactoMineR", "RcmdrMisc", "GPArotation"))
+```
+
+# Técnicas no Supervisadas
+
+```{r}
+## Lectura de los datos
+datos_elec<-readxl::read_excel('DatosEleccionesEspaña.xlsx')
+summary(datos_elec)
+colnames(datos_elec)
+```
+
+## depuración previa
+```{r}
+## Vista de los datos missing
+porcentaje_NA=map_dbl(datos_elec, .f = function(x){mean(is.na(x))})
+porcentaje_NA
+```
+Echando un vistazo a los datos, es notable la presencia de valroes raros (extremadamente altos), valores nulos, porcentajes mínimos negativos. Cuidado con los valores extremos dado qeu es información esencial para nuestro estudio, atendiendo a las singularidades de cada región o comunidad
+
+```{r}
+# eliminamos missing data
+(dim(datos_elec)-dim(na.omit(datos_elec)))/dim(datos_elec)
+elec<-na.omit(datos_elec)
+dim(elec)
+```
+Teniendo en cuenta que el porcentaje en general no supera el 10 % en muchos casos y suponemos esa perdida de información como insignificante
+
+
+## Escoge 10 variables numericas presentes en el conjunto de datos previamente depurado
+```{r}
+# Selecciono las variables de % de paro
+parad<-datos_elec[,c(3,15,17,18,22:28)]
+```
+
+## Agregamos datos por CCAA para todos los % por la media y para datos en valor absoluto por la suma
+```{r}
+ccaa<-aggregate(.~CCAA,parad,mean) # para datos absolutos sum
+rownames(ccaa)<-ccaa$CCAA
+ccaa<-ccaa[,-1]
+#☻Cambiamos los nombres de las cabeceras 
+names(ccaa)<-c('Age19-65', 'WomP', 'Forgn','UnEmp<25','UnEmp25-40','UnEmp>40' ,'AgUnEmp', 'IndUnEmp','ConsUnEmp','SeUnEmp')
+head(ccaa)
+```
+
+## Valora la necesidad de escalar los datos y decide el tipo de distancia a aplicar
+El término distancia se emplea dentro del contexto del clustering como cuantificación de la similitud o diferencia entre observaciones, en definitiva distancia
+```{r}
+# Escalamos los datos pues tenemos unidades de medida muy distintas
+ccaa.sc<-scale(ccaa) 
+library(factoextra)
+# distancias euclidea, correlación pearson
+mat_dist_e <- dist(x = ccaa, method = "euclidean")
+mat_dist_m <- dist(x = ccaa, method = "manhattan")
+mat_dist_p <- get_dist(x = ccaa, method = "pearson")
+mat_dist_s <- get_dist(x = ccaa, method = "spearman")
+p1<-fviz_dist(dist.obj = mat_dist_p, lab_size = 5) +
+  theme(legend.position = "left") +
+  ggtitle('pearson')
+p2<-fviz_dist(dist.obj = mat_dist_e, lab_size = 5) +
+  theme(legend.position = "left") +
+  ggtitle('euclidean')
+p3<-fviz_dist(dist.obj = mat_dist_m, lab_size = 5) +
+  theme(legend.position = "left")+ 
+  ggtitle('manhattan')
+p4<-fviz_dist(dist.obj = mat_dist_s, lab_size = 5) +
+  theme(legend.position = "left")+
+  ggtitle('spearman')
+ggarrange(p1)
+ggarrange(p2)
+ggarrange(p3)
+ggarrange(p4)
+```
+la necesidad de escalar los datos es obvia, dado que los porcentajes se han obtenido mediante diferentes métodos y muestras. En cuanto a la distancia elegida visualmente, vemos que la que muestra algún tipo de agrupación o estructura de los datos es la distancia euclidea, un poco quizás si la manhattan. En cuanto a similitud el coeficiente de pearson si que deja entrever algo de proximidad entre los datos.
+
+## Explora el método de clustering jerárquico para estos datos y decide el tipo de Linkage más adecuado.
+la idea es apartir de una medida de singularidad se van juntando paso a paso juntando el par de clusters mas cercanos. detengamonos en las distancias entre grupo de puntos de los clusters
+```{r}
+methods<-c("complete","average",'ward.D2')
+hclist<-list()
+val.hc<-c()
+for (i in 1:length(methods)){
+  hc=hclust(dist(ccaa.sc),method =methods[i])
+  hclist[[i]]<-hc
+ print(fviz_dend(hc,k = 5, cex = 0.5, color_labels_by_k = T, rect = T)+ggtitle(paste('Linkage ', methods[i])))
+ #ValidaciÃ³n interna
+ cl<-cutree(hc, k = 5) 
+ md.val<-medidasVal(ccaa.sc,cl,cl,methods[i])
+ 
+ # Generar vector de medidas de validaciÃ³n
+ val.hc<- rbind(val.hc,md.val)#Podemos seleccionar otras medidas en la funciÃ³n medidasVal()
+}
+
+names(hclist) <- rownames(val.hc)<-methods
+
+
+```
+
+El dendograma nos permite ver el numero adecuado de agrupamientos y vemos que hasta unos 4 grupos a simple visa. La clave esta en la altura que une las observaciones, donde las uniones mas tempranas se aprecian muy ien mediante este método de linkage, además de estar más equilibrado. prueba de ello son los indices de validación que muestra la metodología ward y su bajo WSS, junto con un alto nivel de silueta.
+
+## Toma una decision sobre el numero de clusters a considerar y realiza un analsis cluster mediante el metodo k-means
+método Elbow calcula la varianza total intra-cluster en función del número de clusters y escoge como óptimo aquel valor a partir del cual añadir más clusters apenas consigue mejoría. Otros métodos serían el silhouette por el que cuantifica como de optima es la asignación de una observación en comparación con el resto de observaciones. Por último, el método Gap statistic que busca el valor k con el que se consigue la estructura de clusters más alejada de la distribución uniforme
+```{r}
+#Número óptimo de clusters por el método del codo
+fviz_nbclust(x = ccaa, FUNcluster = kmeans, method = "wss", k.max = 15) +
+  labs(title = "Número óptimo de clusters")
+#Número óptimo de clusters por el método de silhouette
+fviz_nbclust(x = ccaa, FUNcluster = kmeans, method = "silhouette", k.max = 15) +
+  labs(title = "Número óptimo de clusters")
+fviz_nbclust(x = ccaa, FUNcluster = kmeans, method = "gap_stat", k.max = 15) +
+  labs(title = "Número óptimo de clusters")
+
+```
+La curva del codo nos hace indicar que a partir de 5 clusters la mejora es mínima a traves del método 'wss'o suma total de cuadrados donde al añadir más componentes la variabilidad se ve reducida tras un gran salto de variabilidad (k=5)
+El método silhouette sitúa como número óptimo 8 clusters y el útlimo estadístico lo fija en 1.Tras estas pruebas, podemos acotar el rango de posibles valores a decidir.
+
+```{r}
+#Analíticamente podemos
+library(clValid)
+comparacion <- clValid(
+                  obj        = ccaa.sc,
+                  nClust     = 2:6,
+                  clMethods  = c("hierarchical", "kmeans", "pam"),
+                  validation = c("stability", "internal")
+                )
+summary(comparacion)
+
+```
+El paquete de clvalid permite comparar entre múltiples algorítmos por cada método de clustering la mejor elecciónde clusters que en este caso lo situaría en dos, pero me quedo con la elección del kmeans 3 y el pam 5, ya que me indican que son los mas estables.
+el algoritmo K-means evalua parte de las distribuciones ya que parte de número inicial de clusters, lo que hace importante iterar varias veces mediante asignaciones inicales aleatorias. Me quedo con un número de clusters 5 
+```{r}
+
+# Exploramos k-means con 5 grupos
+km.out3=kmeans(ccaa.sc,3, nstart= 50)
+km.out5=kmeans(ccaa.sc,5, nstart= 50)
+
+km.out5$cluster
+fviz_cluster(km.out5, data = ccaa.sc,  ellipse.type = "norm", palette = "jco",geom="point",repel = TRUE,
+             ggtheme = theme_minimal())
+fviz_cluster(km.out3, data = ccaa.sc,  ellipse.type = "norm", palette = "jco",geom="point",repel = TRUE,
+             ggtheme = theme_minimal())
+
+fviz_cluster(km.out5, data = ccaa.sc,  ellipse.type = "euclid",star.plot = TRUE, palette = "jco",repel = TRUE,
+             ggtheme = theme_minimal())
+
+table(km.out5$cluster,rownames(ccaa))
+
+```
+Con k=3 me sale un espacio de variables donde no hay una clara distinción entre los clusters. mejor 5
+
+
+## Ahora ajusta un modelo hbrido
+tras haber optado por el modelo jerárquico completo por su estabilidad
+```{r}
+# Intentamos unir fuerzas con mÃ©todo hÃ­brido 
+
+set.seed(12345)
+km.out6=kmeans(ccaa.sc,6, nstart= 50)
+km.out4=kmeans(ccaa.sc,4, nstart= 50)
+
+
+hk.out5=hkmeans(ccaa.sc,hc.metric = "euclidean",
+                           hc.method = "ward.D", k = 5, iter.max=100)
+hk.out4=hkmeans(ccaa.sc,hc.metric = "euclidean",
+                           hc.method = "ward.D", k = 4, iter.max=100)
+hk.out6=hkmeans(ccaa.sc,hc.metric = "euclidean",
+                           hc.method = "ward.D", k = 6, iter.max=100)
+
+## K=5
+hkmeans_tree(hk.out5, cex = 0.6)
+fviz_cluster(hk.out5, data = ccaa.sc,  ellipse.type = "convex", palette = "jco",repel = TRUE,
+             ggtheme = theme_minimal())
+
+## k=4
+hkmeans_tree(hk.out4, cex = 0.6)
+fviz_cluster(hk.out4, data = ccaa.sc,  ellipse.type = "convex", palette = "jco",repel = TRUE,
+             ggtheme = theme_minimal())
+
+##k=6
+hkmeans_tree(hk.out6, cex = 0.6)
+fviz_cluster(hk.out6, data = ccaa.sc,  ellipse.type = "convex", palette = "jco",repel = TRUE,
+             ggtheme = theme_minimal())
+
+
+## Medidas de validaciÃ³n
+md.km1<-medidasVal(ccaa.sc,km.out5$cluster,km.out5$cluster,'kmeans')
+md.hk1<-medidasVal(ccaa.sc,hk.out5$cluster,hk.out5$cluster,'hkmeans') 
+md.km2<-medidasVal(ccaa.sc,km.out4$cluster,km.out4$cluster,'kmeans')
+md.hk2<-medidasVal(ccaa.sc,hk.out4$cluster,hk.out4$cluster,'hkmeans') ## Son iguales
+md.km3<-medidasVal(ccaa.sc,km.out6$cluster,km.out6$cluster,'kmeans')
+md.hk3<-medidasVal(ccaa.sc,hk.out6$cluster,hk.out6$cluster,'hkmeans') 
+ValT1<-rbind(val.hc,md.km1,md.hk1)
+ValT2<-rbind(val.hc,md.km2,md.hk2) ## Elmismo clustering con varias tÃ©cnicas
+ValT3<-rbind(val.hc,md.km3,md.hk3)
+
+```
+
+Las medidas de validación son casi practicamente iguales en ambos modelos (híbrido y simple kmeans) con diferencias en la variación de la información para k=5 clusters. no sucede lo msimo para k=4 el cual si que es idéntico tanto en modelo híbrido como el simple kmeans.
+
+##  analisis de reduccion de dimensiones para aplicar posteriormente el clustering.
+Previamente vemos las condiciones iniciales para ACP
+```{r}
+# Gráfico inicial de correlación y comunidades
+corrplot::corrplot(cor(ccaa.sc), method="ellipse")
+qgraph(cor(ccaa.sc), layout="spring", shape="rectangle")
+plot(ccaa.sc, pch=16, cex=0.6)
+
+# Comprobar matriz de correlaciones 
+(c<-RcmdrMisc::rcorr.adjust(ccaa.sc, type="spearman",   use="complete"))
+#determinante de la matriz correlación
+det(c$R$r) ##Ojo muy proximo a cero
+corrplot::corrplot(c$R$r, method="number")
+
+# Test de esferidad de Bartlett
+psych::cortest.bartlett(ccaa.sc)
+
+# Indice de Adecuacion Muestral KMO
+psych::KMO(ccaa.sc) 
+
+
+```
+
+Tras ver las condiciones iniciales, la matriz correlación nos señala que variables de porcentaje de desempleo por sector y edad guardan alta relación u además a destacar entre los porcentajes de desempleo entre sector servicios y agricultura. El determinante de la matriz correlación es cercana a cero, lo que significa que la correlación es presente pero no muy significativa. El test de Barlett deja claro que no se trata de un conjunto esferico sin relación alguna. Por último el KMO nos pide que hay variables sin correlación entre pares
+
+
+
+```{r}
+# seleccionamos un subconjunto
+cca_r= ccaa[,c(1,2,5:10)]
+corrplot::corrplot(cor(cca_r), method="number")
+# Indice de Adecuacion Muestral KMO
+psych::KMO(cca_r) 
+
+#Otro subconjunto
+cca_red= cca_r[,c(1:3,5,8)]
+corrplot::corrplot(cor(cca_red), method="ellipse")
+
+# Indice de Adecuacion Muestral KMO
+psych::KMO(cca_red)
+
+```
+Despues de hacer subconjuntos, hemos llegado a un punto donde con 5 variables que definirán nuestras componentes principales.
+
+
+
+```{r}
+## PCA 
+el.pca <- princomp(cca_red, cor=T)
+el.pca
+
+# InformaciÃ³n del modelo
+summary(el.pca)
+
+# SedimentaciÃ³n
+screeplot(el.pca, type = 'lines')
+
+# Cargas
+loadings(el.pca)
+
+# Biplot por comunidad autÃ³noma
+ggbiplot::ggbiplot(el.pca, labels=rownames(cca_red), groups=ccaa$CCAA,
+                   ellipse = TRUE, circle = TRUE)
+
+```
+```{r}
+
+## Con la funciÃ³n PCA()
+el.pca2<-FactoMineR::PCA(cca_red, scale=T)
+
+
+# InformaciÃ³n del modelo
+summary(el.pca2)
+
+# Biplot frenta a CCAA
+ggbiplot::ggbiplot(el.pca2, labels=rownames(ccaa), groups=ccaa$CCAA,
+                   ellipse = TRUE, circle = TRUE)
+```
+El biplot marca una relación fuerte en la dirección de las variables (flechas) WomP, UnEmp25-40, Age19-95 dado la cercania entre ambas variables. Notese la proximidad de las mismas a la compom¡nente 1, pero no es del todo clara ya que el angulo formado con la coomponente la sitúa a 45º lo que dificulta su peso en la componente. La comunidades de Galicia Asturias, Comunidad Valenciana no son relevante para el estudio, pero si l son Andalucia y Murcia en la componente 2. Vemos que Extremadura esta claramente representada por la variable AgUnEmp, pues su principal actividad económica es la agricultura y en Contraposición está Ceuta, baleares, Melilla cuyos porcentajes de desempleo son procedentes del sector servicios. La Rioja es otra que bein está representada por la componente 1
+
+
+```{r}
+### AF #####
+
+el.fa1 <- factanal(cca_red, factors=2, rotation="none", scores="regression")
+el.fa1
+
+el.fa1 <- psych::fa(ccaa, nfactors=6, rotate="varimax",scores='tenBerge')
+print(el.fa1, cut = 0.3)
+
+# Biplot para AF con la funciÃ³n biplot()
+biplot(el.fa1$scores[,1:2], loadings(el.fa1), cex=c(0.7,0.8))
+```
+
+
+```{r}
+# rAplicamos una reducción por componentes principales 
+pr.out=prcomp(ccaa.sc, scale. = T)
+
+# Varianza explicada
+summary(pr.out)$importance # 80,97%
+
+# Ajustamos el cluster jerÃ¡rquico a la soluciÃ³n de dos componentes
+hc.pr=hclust(dist(pr.out$x[ ,1:2]))
+fviz_dend(hc.pr,k = 4, cex = 0.5, color_labels_by_k = T, rect = T)+ggtitle("Cluster JerÃ¡rquico 2 PC")
+cl.hc.pr<-cutree(hc.pr, k = 4) 
+
+km.out.pr=kmeans(pr.out$x[ ,1:2],4)
+fviz_cluster(km.out4, data = pr.out$x[ ,1:2], 
+             ggtheme = theme_minimal())
+
+```
+
+
+
+

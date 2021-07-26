@@ -1,0 +1,969 @@
+---
+title: "Tarea Minería de Datos y Modeliación predictiva"
+author: "Master en Big Data NTIC. Pablo María Casero Palmero"
+date: "Otoño 2020"
+output:
+  word_document: default
+  pdf_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Modelos de regresión para la predicción de la radiación natural
+
+Se han recogido datos reales sobre distintas variables relacionadas con los niveles de radiación natural de la tierra. Las mediciones fueron recogidas durante el año 2005 en intervalos de 1 hora. Los datos ha sido previamente separados en dos conjuntos:
+
+1. *Rad2005_Training.RDS* contiene el 90% de las observaciones en las que las variables respuetas no presentan valores perdidos. Debido a fallos en los equipos de medición, existe un problema general de valores perdidos en las variables independientes, y tratándose de datos temporales, la estrategia adecuada será mantener la mayor cantidad de observaciones posibles. 
+
+2. *Rad2005_Test.RDS* contiene el 10% de las observaciones donde las variables respuetas no se encuentran recogidas y los predictores no presentan valores perdidos para facilitar las predicciones. 
+
+Por tanto, el objetivo es inspeccionar los datos y realizar los sigueintes pasos:
+
+
+![Fig1. Descripción de los datos](captura.png)
+
+
+
+1. Análisis descriptivo de datos en el conjunto de training. Número de observaciones, número y naturaleza de variables, datos erróneos etc. Distribuciones de variables. Tal vez resulta útil comprobar si las variables en los conjuntos de training y test presentan distribuciones similares.. 
+```{r cars, message=FALSE, warning=FALSE}
+#cargo las librerias que utilizaré para este apartado
+
+library(caret)
+library(lmSupport)
+library(xts)
+library(forecast)
+library(grid)
+library(gridExtra)
+library(ggplot2)
+library(corrplot)
+library(cramer)
+library(psych)
+library(questionr)
+library(car)
+library(purrr)
+library(VIM)
+library(lubridate)
+library(tibble)
+
+```
+
+
+
+2. Análisis de valores extremos (outliers). Decisiones
+
+3. Análisis de valores perdidos. Imputaciones. 
+
+4. Transformaciones de variables y relaciones con las variables objetivo. 
+
+5. Modelos de regresión lineal para predecir la Tasa de Dosis (TD) de radiación
+
+  - Modelos manuales
+  - Selección de variables clásica
+  - Selección de variables aleatoria
+  - Análisis de estabilidad en esquema Tr/Tst y validación cruzada repetida.
+  - Selección del modelo ganador
+  - Interpretación de los coeficientes
+  
+6. Modelos de regresión logística para predecir los picos de radiación (PicoRad)
+
+  - Modelos manuales
+  - Selección de variables clásica
+  - Selección de variables aleatoria
+  - Análisis de estabilidad en esquema Tr/Tst y validación cruzada repetida.
+  - Selección del modelo ganador
+  - Punto de corte de la probabilidad estimada
+  - Interpretación de los coeficientes
+
+
+Una vez elegido el modelo final por medio de la relación entre capacidad predictiva y complejidad, se aplicará al test para predecir los valores de TD y PicoRad y se guardarán las predicciones en un data frame con nombre **predicciones.R** que contendrá dos columnas llamadas **TD_hat** y **PicoRad_hat** y tantas filas como registros del conjunto de test (876 en concreto). 
+
+Tengo en mi poder la verdad verdadera sobre las variables objetivo, por lo que, calcularé los valores de ajuste que cada cual consigue y haremos un ranking de precisión de los mejores modelos. A jugar!!
+
+Se entregarán:
+
+1- *Informe en PDF (máximo 20 páginas)* en el que se exlicarán detalladamente los pasos seguidos incluyendo los códigos y salidas más relevantes. Imprescindible mostrar los modelos finales (summary). Es muy importante comentar y **justificar razonadamente** las decisiones que se toman. Es un informe donde se "venden" los modelos así que hay que ser convincentes!
+
+2- *Archivo de datos con las predicciones* para el conjunto de test. Dimensiones 876 filas x 3 columnas (Fecha, TD, PicoRad). El formato puede ser R (falla en ocasiones con las fechas POSIXct), RDS (preferentemente), Csv, excel... Hay que asegurarse bien de que se puede leer sin problema! 
+
+
+
+## 1) Análisis descriptivo
+
+Dado que es un archivo RDS, se utiliza readRDS() para la lectura. Se comprueba que es correcto y se presentan las primeras tablas de inspección. 
+```{r,message=FALSE, warning=FALSE}
+
+setwd("~/Desktop/UCM/Mineria de Datos/Master Big Data y Data Science Comercio 2020/Entrega")
+
+# Carga de funciones
+source("Funciones_R.R")
+
+# Lectura del archivo
+Radiacion2005 <- readRDS("Rad2005_Training.RDS")
+
+# Inpsección rápida
+str(Radiacion2005)
+
+```
+Como podemos observar todas las variables son de tipo numerico, donde la variables objetivo (Picorad) es de tipo dicotómica y la variable objetivo (TD) es continua.
+
+Siguiendo con el apartado 1, obtenemos Número de observaciones, número y naturaleza de variables. El procedimiento summary nos da una decispción estadística de los datos:
+```{r }
+#Descripción del dataset
+summary(Radiacion2005)
+```
+Dentro de las observaciones raras encontramos:
+- variable Flecha: no tiene ningun sentido hacer este tipo de observaciones con una variables como esta dado que es de tipo fecha y se podría extraer de la misma una nueva variable numérica que recoja los tiempos en minutos u horas por ejemplo.
+- Variables Radon, Desc.Rn, Pres temp y Hr presentan valores nulos. a destacar entre estas el alto numero en la variable Desc Rn y el hecho que se repita la misma cantidad de missing values entre varias variables.
+- Variables lluvia y Pico Rad presentan distribuciones raras
+
+Extraemos la variable mes de la variable Fecha
+```{r}
+#Extrar el mes, el día
+Radiacion2005$mes <- as.numeric(format(Radiacion2005$Fecha,'%m'))
+Radiacion2005$dia <- as.numeric(format(Radiacion2005$Fecha,'%d'))
+#Extraemos la hora
+Radiacion2005$hora<- as.numeric(hour(Radiacion2005$Fecha))
+```
+
+
+### Numero de observaciones, datos raros y vacios
+la decisión de convertir en factores las variables dependerá en gran medida de como sea la cantidad de diferentes el número de valores distintos dentro de la variable.
+```{r}
+#Número total de datos recogidos en el train
+print(nrow(Radiacion2005))
+```
+
+```{r}
+#Numero de valores unicos por variable
+sapply(Filter(is.numeric, Radiacion2005),function(x) length(unique(x)))
+```
+En general las variables contienen valores únicos superiores a 10 a excepción de la variable objetivo Picorad claramente dicotómica. 
+Echamos un ojo a los valores asuentes o vacios:
+
+```{r}
+#Porcentaje datos ausentes de las variables
+porcentaje_NA=map_dbl(Radiacion2005, .f = function(x){mean(is.na(x))})
+porcentaje_NA
+```
+```{r}
+#datos proximos a cero de las variables
+Radiacion2005 %>% map_dbl(.f = function(x){mean(!is.na(x) & x == 0)})
+```
+Es destacable los pocos valores observados en Lluvia y la gran cantidad o porcentaje de missing values en Irrad.sola y DescRnr, lo que nos lleva a profundizar si eliminar esta variable o no. Además cabe la posibilidad de si esos valores vacios guardan relación entre o presentan un patrón. Un ejemplo de ello son las variables Pres, Temp, y HR las cuales tienen el mismo porcentaje de valores nulos dentro de cada una. Esto claramente apunta a algo.Los datos de lluvia son claramente en su mayoría ceros y por tanto no aportan gran información,lo que nos hace pensar que se hallan tomado erróneamente o que lo que se obtuvo no fue gran resultado de la experimentación.
+
+
+
+### Distribuciones 
+Gráficamente también se puede ver como es la distribuciónd de las variables
+
+```{r cars, message=FALSE, warning=FALSE}
+par(mcol=c(1,1))
+# Inspección gráfica 1: Boxplot
+box<-dfplot_box(data.frame(Radiacion2005)[,-1]) # Devuelve una lista de gráficos. Hay que forzar al objeto a ser data.frame!!!!
+marrangeGrob(box, ncol = 4, nrow = 3) # Se representa en una rejilla de 4x3
+
+# Inspección gráfica 2: Histograma
+his<-dfplot_his(data.frame(Radiacion2005)[,-1])
+marrangeGrob(his, ncol = 4, nrow = 3)
+```
+Los histogramas como es la distribución  de las observaciones dentro de cada variable:
+- Variables como Radon, desc Rn, TD muestran gran apuntamiento, con asimetría postiva y valores extremos en la cola derecha . 
+- Variables Pres, temp Hr parecen estar más balanceadas, con valores concentrados entorno a la media donde Pres sigue una distribución más normal (media casi igual con la mediana). 
+- Variables Vviento, Irrad PicoRad presentan una asimetría positiva hacia la derecha pero con peculiaridades. Cabe destacar e Irrad.solar y PicoRad hay un pico al principio y luego se estabiliza rapidamente donde el caso de Picorad sube al final. La variable Irrad.solar presenta una gráfica con pequeños saltos lo que explica su alta variabilidad
+- Variable lluvia no podemos decir que siga distribución alguna dado su poca consistencia en la misma
+
+Los Boxplots nos estan diciendo como estan de dispersos los valores de acuerdo a su rango intercuantilico:
+- Variables TD, Radon, DescRn tanto media y mediana proximas a cero y donde concentran valores en un extremo donde no se podran decir que sean outliers sino valores extremos
+- Variable Irrad.solar presenta una elevada variabilidad y unos posibles candidatos a outliers.
+variables HR, Temp Pres parecen estar mejor distribuidas y en el caso de Pres donde el rango es menor y valores fuera de los bigotes a ambos lados de la caja.
+
+Las variables relacionadas con el tiempo: no es de gran ayuda servirse de los histogramas dado que su distribución no se distinguen entre ellas y esta muy estable. Los boxplots is que ayudan y me estan diciendo de que hay amplitud de la variabilidad de los datos y son muestras bastante centradas.
+
+```{r}
+#Observemos los días, mese y horas
+boxplot(Radiacion2005$TD~Radiacion2005$mes)
+boxplot(Radiacion2005$TD~Radiacion2005$dia)
+boxplot(Radiacion2005$TD~Radiacion2005$hora)
+```
+
+Podemos ver que la variable mes si recoge mas variabilidad, mayor movilidad de los datos y por tanto mayor interés suscita en estudiar como se comporta a lo largo de los meses. No ocurre igual con la variable día pues presenta valores muy similares (una mediana entorno 158 ) y en general, un cierta estabilización de los datos. la variable hora si que me plantea dudas de si será significativa, con una leve tendencia. esta última si mantendré para mi estudio y probaremos a ctageorizarla por tramos.
+
+```{r}
+#Elimino dias
+Radiacion2005$dia <- NULL
+```
+
+```{r}
+#distribucion frente a la respuesta continua 
+TD.lluvia=boxplot(Radiacion2005$TD~Radiacion2005$Luvia,main= 'TD vs Lluvia')
+TD.Irradsolar=boxplot(Radiacion2005$TD~Radiacion2005$Irrad.solar, main='TD vs Lluvia')
+TD.descRn= boxplot(Radiacion2005$TD~Radiacion2005$Desc.Rn)
+plot(Radiacion2005$TD~Radiacion2005$Luvia)
+
+```
+Observamos una cierta estabilización entre los valores recogidos en las variable lluvia y donde hay observaciones marginales los cuales podrían denominarse como outliers o quizas agruparlos dentro de una única variable categorica más. Esta variable lluvia agrupa muchos valores entre 0 y 2 dentro de los pocos valores obtenidos. 
+
+vemos que presenta categorias dentro de la variable con poca representación y como apuntan los datos podrías agruparmse entorno a 0 y 1 dado que es donde mayor concentración de datos hay. Básicamente vamos a convertir la variable lluvia en una dicotómica donde 0 indicará no lluvia y 1 lluvia
+```{r}
+#Transformamos la variable dicotómica en factor
+Radiacion2005$Luvia<- ifelse(Radiacion2005$Luvia > 0, 1, 0)
+#añadimos la variable mes como variable categorica 
+Radiacion2005[,c(9,11,12,13)] <- lapply(Radiacion2005[,c(9,11,12,13)], factor)
+levels(Radiacion2005$mes)<- c('Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre','Octubre', 'Noviembre', 'Diciembre')
+str(Radiacion2005)
+```
+```{r}
+# Ver el reparto de las categorìas de las variables cualitativas
+lapply(Filter(is.factor,Radiacion2005),freq)
+
+```
+Por simplificar el modelo podemos agrupar la variable hora en dos tramos de 12 h visto la agrupación datos donde se observa una leve bajada entre el primer tramo de 12 h y el sgundo ..
+```{r}
+#Dividimos la variable hora
+Radiacion2005$hora<-as.numeric(as.character(Radiacion2005$hora))
+#Radiacion2005$hora<-replace(Radiacion2005$hora, which(Radiacion2005$hora>12), 12)
+Radiacion2005$hora<-car::recode(Radiacion2005$hora, "c(0,1,2,3,4,5,6,7,8,9,10,11)='0-12'; c(12,13,14,15,16,17,18,19,20,21,22,23)='12-24'", as.factor = T)
+levels(Radiacion2005$hora)
+```
+
+
+```{r}
+# Ver la distribución frente a la variable respuesta continua
+TD.descRn= boxplot(Radiacion2005$TD~Radiacion2005$Radon)
+```
+
+Bien se observa como ya intuimos valores claramente outliers y entorno al valor 65 hay mayor varibilidad frente a la estbilidad generalizada a lo largo de la variable radon.
+
+
+```{r}
+#leer dataset
+Radiacion2005.test <- readRDS("Rad2005_Test.RDS")
+str(Radiacion2005.test)
+```
+```{r}
+
+# Inspección gráfica 3: Boxplot
+box.test<-dfplot_box(data.frame(Radiacion2005.test)[,-1]) # Devuelve una lista de gráficos. Hay que forzar al objeto a ser data.frame!!!!
+marrangeGrob(box.test, ncol = 4, nrow = 3) # Se representa en una rejilla de 4x3
+
+# Inspección gráfica 4: Histograma
+his.test<-dfplot_his(data.frame(Radiacion2005.test)[,-1])
+marrangeGrob(his.test, ncol = 4, nrow = 3)
+```
+Comprobamos que a simple vista que los datos de entrenamiento y test muestran distribuciones similares, lo que nos hace indicar que los datos de test son idoneos para las variables respuesta 
+
+
+
+## Analisis de outliers 
+Tener en cuenta que las transformaciones solo se realizaran sobre los predictores
+Divido entre las ques on variables objetivos y las demas variables
+```{r}
+# Indico las variables objetivo y los input
+varObjCont<-Radiacion2005$TD
+varObjBin<-Radiacion2005$PicoRad
+input<-as.data.frame(Radiacion2005[,-c(1,2,11)])
+colnames(input)
+
+```
+
+Mediante estadísticos como ofrece la libreria **psych** podemos obtener información detallada a nivel descriptivo de las variables numericas:
+```{r}
+#estadístico
+psych::describe(Filter(is.numeric, input))
+```
+
+```{r}
+# % de atipicos por variable
+sapply(Filter(is.numeric, input),function(x) atipicosAmissing(x)[[2]])/nrow(input)
+```
+```{r}
+# Modifico los atípicos como missings
+input[,as.vector(which(sapply(input, class)=="numeric"))]<-sapply(
+  Filter(is.numeric, input),function(x) atipicosAmissing(x)[[1]])
+sum(is.na(input))
+summary(input)
+
+```
+Trato de localizar patrones dentro de los missing. En este caso ver la correlación entre las variables
+
+```{r}
+#Matriz de correlaciones
+corrplot(cor(is.na(input[colnames(input)[colSums(is.na(input))>0]])),method = "ellipse",type = "upper")
+```
+Visiblemente hay correlación positiva entre Radon con las variables presión, temperatura, Humedad Relativa. Notablemente percatable entre la Irradiación Solar y el descenso del Radon
+
+```{r}
+#Proporción de missings por variable y observación
+input$prop_missings<-apply(is.na(input),1,mean)
+summary(input$prop_missings)
+prop_missingsVars<-apply(is.na(input),2,mean)
+prop_missingsVars
+```
+Tal es la relación entre HR, Temp, Pres que hasta la proporción es la misma y donde mayor porcentaje se observa es en Radon. 
+
+
+```{r}
+#contabilizo los valores perdidos
+#subset(input, prop_missingsVars< 0.5, select=names(prop_missingsVars)[prop_missingsVars<0.5])
+dim(na.omit(input))
+dim(input)
+```
+## Imputaciones
+```{r}
+# Imputo todas las cuantitativas: media, mediana o aleatorio
+input[,as.vector(which(sapply(input, class)=="numeric"))]<-sapply(
+  Filter(is.numeric, input),function(x) ImputacionCuant(x,"aleatorio"))
+summary(input)
+# Imputo todas las cualitativas, seleccionar el tipo de imputación: moda o aleatorio
+# Si solo se quiere imputar una, variable<-ImputacionCuali(variable,"moda")
+input[,as.vector(which(sapply(input, class)=="factor"))]<-sapply(Filter(is.factor, input),function(x) ImputacionCuali(x,"aleatorio"))
+
+# A veces se cambia el tipo de factor a character al imputar, así que hay que indicarle que es factor
+input[,as.vector(which(sapply(input, class)=="character"))] <- lapply(
+  input[,as.vector(which(sapply(input, class)=="character"))] , factor)
+
+```
+
+
+```{r}
+# Es posible que quede algún missing sin imputar... fallo en la función. 
+if (any(is.na(input))){
+input[,as.vector(which(sapply(input, class)=="numeric"))]<-sapply(
+  Filter(is.numeric, input),function(x) ImputacionCuant(x,"aleatorio"))
+  summary(input)
+}
+
+```
+Las imputación de los missing se ha llevado a cabo de manera aleatoria, dado que las distribuciones de las variables no siguen una uniformidad como la normal (0,1) y de esta manera evitamos el sesgo dentro de las variables. nota importantes: la variable LLuvia al categorizarla evitamos la perdida de información que si hubiesemos mantenido esta como variable numérica.
+
+## Transformaciones y respuesta a la variable respuesta
+
+Veamos con es la distribucion frente a la variable respuesta. Antes de todo crearemos dos variables aleatorias para evitar correlaciones a priori
+```{r}
+# Creo la variable aleatoria (control del efecto real y no casual de los predictores)
+input$aleatorio<-runif(nrow(input))
+input$aleatorio2<-runif(nrow(input))
+```
+
+Primero, veo como es la importancia de las variables respecto las variables respuestas a través del gráfico de Cramer
+
+```{r}
+#Obtengo el gráfico de Cramer por cada variable respuesta
+graficoVcramer(input,varObjBin)
+graficoVcramer(input,varObjCont)
+```
+También podemos apoyarnos del estadístico  Chi Cuadrado que nos calcula la bondad del test bajo hipótesis test de indepencia de las variables.
+
+```{r}
+#Veo graficamente el efecto de las variables
+chisq.test(table(input$Radon, varObjBin))
+chisq.test(table(input$Temp, varObjCont))
+chisq.test(table(input$mes, varObjCont))
+```
+
+1º gráfico: Claramente las variables Mes y Radon destacan como variables predictoras para explicar la variable objetivo Picorad. A primera vista podríamos decidir sobre las variables candidatas a formar parte del modelo y cuales como las variables aleatorias no aportan nada y nos permite fiarnos del conjunto de datos. La variable Luvia escasamente aporta algo a nuestra variable binaria objetivo.
+2º gráfico: Nuevamente la variable Temp y Radon cobran importancia como variables predictoras para explicar la variable objetivo continua, aunque esta última no tanto como HR.
+Es natural pensar que las dos variables objetivos guarden estrecha relación entre sí dado que si la Tasa de dosis aumenta es obvio que se incremente el número de casos donde  el Pico de radian estblecido  se alcance. 
+
+```{r}
+#Veo el efecto de dos variables cualitativas sobre la binaria
+par(mfrow=c(1,2))
+mosaico_targetbinaria(input$mes,varObjBin,"Mes")
+barras_targetbinaria(input$mes,varObjBin,"Mes")
+
+mosaico_targetbinaria(input$hora,varObjBin,"Hora")
+barras_targetbinaria(input$hora,varObjBin,"Hora")
+```
+De esta otra manera vemos que influye el mes en la variable objetivo binaria, porque se trata de una muestra que evoluciona a lo largo del paso del tiempo,osea estacionaria donde se contempla un pico entorno a los meses de Agosto, Septiembre y  Octubre. 
+La variable Horas esta claramente desbalanceada, dado el peso que tienenlos ceros frente a a los unos. Al parecer en el primer tramo de horas se observan mas picos de Radian. 
+
+```{r}
+#Veo graficamente el efecto de las variables
+boxplot_targetbinaria(input$Radon,varObjBin,"Radon")
+boxplot_targetbinaria(input$Temp,varObjBin,"Temp")
+hist_targetbinaria(input$Radon,varObjBin,"Radon")
+hist_targetbinaria(input$Temp,varObjBin,"Temp")
+```
+Naturalmente, la distribución de la variable radon identifica y se ajusta a la realidad cuando se trata de identificar los picos de radon (1) que cuando no los detecta.
+Realizamos un estudio descriptivo y visual de las correlaciones entre las variables continuas y la variable respuesta continua
+
+```{r}
+corrplot(cor(cbind(varObjCont,Filter(is.numeric, input)), use="pairwise", 
+             method="pearson"), method = "number",type = "upper")
+
+```
+No hay correlación fuerte o directa entre alguna de las  variables con la variable objetivo si observamos la matriz, aunque sí ligeramente percetible en las variables Temp y HR . Notase la gran correlación negativa existente entre si en el caso de las variables Temp y HR. esto se puede deber a que al tratarse de un fenomeno fisico ambás guardan relación muy notable, en donde si una aumenta la otra variable se ve decrementada también. ojo con radon y Desc.Radon donde es evidente y claro que esten estrechamente relacionadas ya que la existencia de una variable estará sujeta a la presencia de otra, es decir, a mayor presencia de Radón para mayores decensos de Radón.
+
+Este es el aspecto del archivo. Ahora vamos a convertirlo a serie temporal y representarlo gráficamente.
+
+## Transformación de variables
+Habiendo hecho las comprobaciones anteriores, este paso es fundamental para poder linealizar las variables input con la variable objetivo y, en definitiva, para poder llevar a cabo con exito nuestro modelo de regresión lineal con exito.
+
+```{r, warning=FALSE}
+
+#realizo las transformaciones para las variables numéricas con respesto a los dos tipos de variables
+input_cont<-cbind(input,Transf_Auto(Filter(is.numeric, input),varObjCont))
+
+# Cuento el número de valores diferentes para las numéricas 
+sapply(Filter(is.numeric, input)[,-ncol(Filter(is.numeric, input))],function(x) length(unique(x)))
+
+```
+```{r, warning=FALSE}
+
+input_bin<-cbind(input,Transf_Auto(Filter(is.numeric, input),varObjBin)) 
+input_bin<- input_bin[,-c(11,21)]# Quito proporción de missings (menos de 10)
+
+## Guardar conjuntos de datos para regresión lineal y logística.
+saveRDS(data.frame(input_bin,varObjBin),"todo_bin_V")
+saveRDS(data.frame(input_cont,varObjCont),"todo_cont_v")
+saveRDS(data.frame(input),"input")
+```
+
+Nota: la prop_missing la quito dado que recoge pocos valores unicos, lo que me hace indicar que la mantenga como facotr y no como numérica
+
+## Modelos de regresión lineal para predecir la Tasa de Dosis (TD) de radiación
+
+### Modelos manuales train/test
+
+```{r, warning=FALSE}
+# Voy a crear el archivo con datos estandarizados 
+inputScale<-cbind(scale(Filter(is.numeric,input)),Filter(is.factor,input))
+## Comienzo con la regresión lineal
+todo<-data.frame(input,varObjCont)
+todoScale<-data.frame(inputScale,varObjCont)
+todo$log_varObjCont <-log(todo$varObjCont)
+todoScale$log_varObjCont <-log(todoScale$varObjCont)
+
+#Obtengo la partici?n
+set.seed(123456)
+trainIndex <- createDataPartition(todo$varObjCont, p=0.8, list=FALSE)
+data_train <- todoScale[trainIndex,]
+data_test <- todoScale[-trainIndex,]
+
+set.seed(123456)
+trainIndexSc <- createDataPartition(todoScale$varObjCont, p=0.8, list=FALSE)
+data_trainSc <- todoScale[trainIndexSc,]
+data_testSc <- todoScale[-trainIndexSc,]
+
+```
+
+Esta fase de la modelización conissitirá en la selección de variables que vayan a conformar nuestro modelo, ya que determinará en gran parte la calidad del modelo.
+Comenzaremos con el método hacia adelante que consistirá en introducir variables una a una hasta uqe haya una variable que no aporte información.
+
+```{r}
+#Construyo un modelo preliminar con todas las variables
+modeloCompleto<-lm(varObjCont~.-log_varObjCont,data=data_train)
+summary(modeloCompleto)
+Rsq(modeloCompleto,"varObjCont",data_train)
+Rsq(modeloCompleto,"varObjCont",data_test)
+
+barplot(sort(modelEffectSizes(modeloCompleto)$Effects[-1,4],decreasing =T),las=2,main="Importancia de las variables (R2)")
+
+# Evaluar colinealidad (factor de inflacción de la varianza)
+car::vif(modeloCompleto)
+```
+
+```{r}
+#Construyo un modelo preliminar con todas las variables
+modeloCompletoSc<-lm(varObjCont~.-log_varObjCont,data=data_trainSc)
+summary(modeloCompletoSc)
+
+Rsq(modeloCompletoSc,"varObjCont",data_trainSc)
+Rsq(modeloCompletoSc,"varObjCont",data_testSc)
+barplot(sort(modelEffectSizes(modeloCompleto)$Effects[-1,4],decreasing =T),las=2,main="Importancia de las variables (R2)")
+
+# Evaluar colinealidad (factor de inflacción de la varianza)
+car::vif(modeloCompletoSc)
+```
+Se observa el efecto sobre R2 de cada una de las variables en el modelo y la variable mes tiene gran influencia. Tal es su nivel de influencia. que podremos crear un modelo con la variable en cuestión simplemente. Ambos modelos tanto el completo y el escalado son similares misma R2 (0.387). por lo tanto me decanto por continuar con las variables originales sin escalar. Con respecto al VIF, no hay valores superiores a 10 que sugieran problema alguno con el modelo. Por comentar algun caso a resaltar es la relación entre las variables temp y Hr que anteriormente ya comentamos.
+
+Probaremos cun modelo de regresión unicamente con la variable Radon por su significancia
+
+```{r}
+#Modelo simple con una variable
+modelo0<-lm(varObjCont~mes,data=data_train)
+summary(modelo0)
+
+Rsq(modelo0,"varObjCont",data_train)
+Rsq(modelo0,"varObjCont",data_test)
+
+```
+
+Vemos que de por si el modelo simple obtenido destaca por ser muy notable y donde su efecto es muy poco significativo.Va ser turno para otras variables que veamos relevantes ya sea por el gráfico de V de Cramer como Temp. No perdemos de vista el detectar la colinealidad entre más de dos predictores (multicolinealidad), donde en este modelo general nos muestra cierta colinealidad entre HR y Tem.
+
+Tratemos dever como son de buenas las combinaciones entre estos factores (temperatura, HR, pres)
+```{r}
+#Combinaciones con los parametros de Radon, Presión Temperatura y Humedad relativa
+modelo1<-lm(varObjCont~Radon*Desc.Rn, data=data_train)
+summary(modelo1)
+
+Rsq(modelo1,"varObjCont",data_train)
+Rsq(modelo1,"varObjCont",data_test)
+
+modelo2<-lm(varObjCont~Temp*HR,data=data_train)
+summary(modelo2)
+
+Rsq(modelo2,"varObjCont",data_train)
+Rsq(modelo2,"varObjCont",data_test)
+
+modelo3<-lm(varObjCont~Pres+Temp*HR,data=data_train)
+summary(modelo2)
+
+Rsq(modelo3,"varObjCont",data_train)
+Rsq(modelo3,"varObjCont",data_test)
+
+modelo4<-lm(varObjCont~Pres*HR,data=data_train)
+summary(modelo4)
+
+Rsq(modelo4,"varObjCont",data_train)
+Rsq(modelo4,"varObjCont",data_test)
+
+#car::vif(modelo) #SUbe VIF en Temp
+```
+
+Ahora trataremos con la respuesta logaritmica que generamos anteriormente.
+
+```{r}
+#Escala logarítmica
+modelo0_log<-lm(log_varObjCont~mes,data=data_train)
+summary(modelo0_log)
+
+Rsq(modelo0_log,"log_varObjCont",data_train)
+Rsq(modelo0_log,"log_varObjCont",data_test)
+
+modelo1_log<-lm(log_varObjCont~Radon*Desc.Rn,data=data_train)
+summary(modelo1_log)
+
+Rsq(modelo1_log,"log_varObjCont",data_train)
+Rsq(modelo1_log,"log_varObjCont",data_test)
+
+modelo2_log<-lm(log_varObjCont~Temp*HR,data=data_train)
+summary(modelo2_log)
+
+Rsq(modelo2_log,"log_varObjCont",data_train)
+Rsq(modelo2_log,"log_varObjCont",data_test)
+
+modelo3_log<-lm(log_varObjCont~Pres+Temp*HR,data=data_train)
+summary(modelo3_log)
+
+Rsq(modelo3_log,"log_varObjCont",data_train)
+Rsq(modelo3_log,"log_varObjCont",data_test)
+
+modelo4_log<-lm(log_varObjCont~Pres*HR,data=data_train)
+summary(modelo4)
+
+Rsq(modelo4_log,"log_varObjCont",data_train)
+Rsq(modelo4_log,"log_varObjCont",data_test)
+```
+
+
+
+
+
+```{r}
+Rsq(modelo1,"varObjCont",data_test)
+Rsq(modelo2,"varObjCont",data_test)
+Rsq(modelo3,"varObjCont",data_test)
+Rsq(modelo4,"varObjCont",data_test)
+
+```
+Dadas las diferentes alternativas que nos ofrecen los modelos mediante la combinacion de estas variables, debemos decidir cual tiene mejor relación sesgo varianza.  
+```{r}
+total<-c()
+modelos<-sapply(list(modelo0,modelo1,modelo2,modelo3,modelo4,modelo0_log,modelo0_log,modelo1_log,modelo2_log,modelo3_log,modelo4_log),formula)
+
+for (i in 1:length(modelos)){
+  set.seed(1712)
+  vcr<-train(as.formula(modelos[[i]]), data = todo,
+             method = "lm",
+             trControl = trainControl(method="repeatedcv", number=5, repeats=20,returnResamp="all")
+  )
+  total<-rbind(total,data.frame(vcr$resample,modelo=rep(paste("Modelo",i),
+                                                                nrow(vcr$resample))))
+}
+boxplot(Rsquared~modelo,data=total,main="Precisión de los modelos")
+```
+```{r}
+aggregate(Rsquared~modelo, data = total, mean)
+aggregate(Rsquared~modelo, data = total, sd)
+```
+probamos con la técnica hacia adelante para la respuesta logarítmica
+
+```{r}
+modelo1_0<-lm(log_varObjCont~mes+Radon,data=data_train)
+summary(modelo1_0)
+
+Rsq(modelo1_0,"log_varObjCont",data_train)
+Rsq(modelo1_0,"log_varObjCont",data_test)
+
+modelo1_1<-lm(log_varObjCont~mes+Radon+Pres,data=data_train)
+summary(modelo1_1)
+
+Rsq(modelo1_1,"log_varObjCont",data_train)
+Rsq(modelo1_1,"log_varObjCont",data_test)
+
+modelo1_2<-lm(log_varObjCont~mes+Radon+Pres+Desc.Rn,data=data_train)
+summary(modelo1_2)
+
+Rsq(modelo1_2,"log_varObjCont",data_train)
+Rsq(modelo1_2,"log_varObjCont",data_test)
+
+modelo1_3<-lm(log_varObjCont~mes+Radon+Pres+Desc.Rn+Luvia,data=data_train)
+summary(modelo1_3)
+
+Rsq(modelo1_3,"log_varObjCont",data_train)
+Rsq(modelo1_3,"log_varObjCont",data_test)
+
+modelo1_4<-lm(log_varObjCont~mes+Radon+Pres+Desc.Rn+Luvia+HR,data=data_train)
+summary(modelo1_4)
+
+Rsq(modelo1_4,"log_varObjCont",data_train)
+Rsq(modelo1_4,"log_varObjCont",data_test)
+
+modelo1_5<-lm(log_varObjCont~mes+Radon+Pres+Desc.Rn+Luvia+HR+prop_missings,data=data_train)
+summary(modelo1_5)
+
+Rsq(modelo1_5,"log_varObjCont",data_train)
+Rsq(modelo1_5,"log_varObjCont",data_test)
+
+modelo1_6<-lm(log_varObjCont~mes+Radon+Pres+Desc.Rn+Luvia+HR+prop_missings+Temp,data=data_train)
+summary(modelo1_6)
+
+Rsq(modelo1_6,"log_varObjCont",data_train)
+Rsq(modelo1_6,"log_varObjCont",data_test)
+
+
+modelo1_7<-lm(log_varObjCont~mes+Radon+Pres+Desc.Rn+Luvia+HR+prop_missings+Temp+hora,data=data_train)
+summary(modelo1_7)
+
+Rsq(modelo1_7,"log_varObjCont",data_train)
+Rsq(modelo1_7,"log_varObjCont",data_test)
+
+modelo1_8<-lm(log_varObjCont~mes+Radon+Pres+Desc.Rn+Luvia+HR+prop_missings+Temp+hora+Irrad.solar,data=data_train)
+summary(modelo1_8)
+
+Rsq(modelo1_8,"log_varObjCont",data_train)
+Rsq(modelo1_8,"log_varObjCont",data_test)
+
+modelo1_9<-lm(log_varObjCont~mes+Radon+Pres+Desc.Rn+Luvia+HR+prop_missings+Temp+hora+Irrad.solar+aleatorio2,data=data_train)
+summary(modelo1_9)
+
+Rsq(modelo1_9,"log_varObjCont",data_train)
+Rsq(modelo1_9,"log_varObjCont",data_test)
+
+
+
+```
+
+```{r}
+Rsq(modelo1_0,"log_varObjCont",data_test)
+Rsq(modelo1_1,"log_varObjCont",data_test)
+Rsq(modelo1_2,"log_varObjCont",data_test)
+Rsq(modelo1_3,"log_varObjCont",data_test)
+Rsq(modelo1_4,"log_varObjCont",data_test)
+Rsq(modelo1_5,"log_varObjCont",data_test)
+Rsq(modelo1_6,"log_varObjCont",data_test)
+Rsq(modelo1_7,"log_varObjCont",data_test)
+Rsq(modelo1_8,"log_varObjCont",data_test)
+Rsq(modelo1_9,"log_varObjCont",data_test)
+
+car::vif(modelo1_0)
+car::vif(modelo1_1)
+car::vif(modelo1_2)
+car::vif(modelo1_3)
+car::vif(modelo1_4)
+car::vif(modelo1_5)
+car::vif(modelo1_6)
+car::vif(modelo1_7)
+car::vif(modelo1_8)
+car::vif(modelo1_9)
+```
+El vif o la correlación múltiple siempre es notable en mes y Temp a lo largo de los modelos donde se sitúa en un valor más alto justo donde el R2 se sitúa en niveles más altos 0.62 en el modelo 8 y nos hace pensar el peligro que pueda generar. El modelo más parecido y con menor VIF es el modelo 6 , ademas consigo situarla entorno a 5. Hay que darse cuenta que a medida que el modelo es mas complejo y hay mas variables se idspara el VIF.
+
+### Modelo de validación cruzada
+
+Es momento de comparar los distintos modelos por validación cruzada repetida mediante la semilla de inicialización en las particiones de test y train. para evitar problemas con la aleotoriedad de los datos el proceso se repite multiples veces donde tendremos que jugar con la semilla de partición del conjunto
+```{r}
+total_sc<-c()
+modelos<-sapply(list(modelo1_0,modelo1_1,modelo1_2,modelo1_3,modelo1_4,
+modelo1_5,modelo1_6,modelo1_7,modelo1_8, modelo1_9),
+formula)
+for (i in 1:length(modelos)){
+set.seed(1712)
+vcr<-train(as.formula(modelos[[i]]), data = todo,
+method = "lm",
+trControl = trainControl(method="repeatedcv", number=5, repeats=20,returnResamp="all")
+)
+total_sc<-rbind(total_sc,data.frame(vcr$resample,modelo=rep(paste("Modelo",i),
+nrow(vcr$resample))))
+}
+boxplot(Rsquared~modelo,data=total_sc,main="Precisión de los modelos")
+```
+```{r}
+#Análisis de sesgo-varianza
+aggregate(Rsquared~modelo, data = total_sc, mean)
+aggregate(Rsquared~modelo, data = total_sc, sd)
+```
+```{r}
+#Número de parámetros
+length(coef(modelo1_0))
+length(coef(modelo1_1))
+length(coef(modelo1_2))
+length(coef(modelo1_3))
+length(coef(modelo1_4))
+length(coef(modelo1_5))
+length(coef(modelo1_6))
+length(coef(modelo1_7))
+length(coef(modelo1_8))
+length(coef(modelo1_9))
+```
+Atendiendo a la relación sesgo-varianza y número óptimo de variables, el mejor modelo es el 8 con un R2 0.62 y número de parametros igual a 21, dado que cuanto más sencillo mejor será para nuestra regresión. no sería mala opción tambien el modelo 6 con parecido r2 y menos parámetros, en caso de que queramos modelos más sencillos. 
+
+### Interprestación parámetros
+```{r}
+modeloFinal<-lm(formula(modelo1_8), data = todo)
+summary(modeloFinal)
+```
+```{r coeficientes del modelo manual final y ecuacion de regresion}
+cf<-round(coef(modeloFinal),4)
+
+cat('log(Price) = ',cf[1],' + ',cf[2],'* mesAgosto + ',cf[3],'* mesDiciembre + \n'
+    ,cf[4],'*(mesEnero) + ',cf[5],'*(mesFebrero) + ',cf[6],'*mesJulio + \n'
+    ,cf[7],'*(mesJunio) + ',cf[8],'*(mesMarzo) + \n'
+    ,cf[9],'*(mesMayo) + ',cf[10],'*(mesNoviembre) + \n'
+    ,cf[11],'*(mesOctubre) + ',cf[12],'*(mesSeptiembre) + \n'
+    ,cf[13],'*(Radon) + ',cf[14],'*(Pres) + \n'
+    ,cf[15],'*(Desc.rn) + ',cf[16],'*(Luvia=1)',cf[17],'*(HR)  + \n'
+    ,cf[18],'*(prop-missing))+',cf[19],'*(Temp)+',cf[20],'*(hora=12-24) + \n'
+    ,cf[21],'*(Irrad.solar))')
+```
+Como resultado final de nuestro modelo manual elegido, modelo 8 podemos decir que presenta ciertoa colinealidad (VIF=7) generada por la variable categórica mes y su relación en el tiempo. Si bien podríamos reducir el VIF reduciendo el número de categorías y evitando asi que presenten colinealidad pero obtendriamos un r2 más pequeño. comentar que al tratarse de un modelo con respuesta logarítmica el efecto de los estimadores afectará en la respuesta en un aumento en porcentaje. En nuestro modelo:
+  - Categoria meses: la relación no parece comprtarse de manera lineal donde por un lado decae la tasa de Dosis en meses como Enero, Febrero, Diciembre Noviembre entorno a una caida de la Tasa de dosis de un 1,1%, mientras que los meses de Agosto, Julio, Mayo, Junio, Julio se situa en un aumento de un 2.2-2.5% de la Tasas de dosis.
+  - Un aumento unitario de radon produce un incremento de la Tasa de dosis de 0.06% y en el caso des.Rn es mas notable el aumento de frente a la variable respuesta
+  - El modelo penaliza el todavía más el aumento de presión (0.11%) que el aumento de HR o Temp (0.03%) en relación con la Tasa de dosis de radiación
+  - Algo con cierta significancia el aumento de Prop_missing (2.2%) o LLuvia (1.42%) trae consigo un incremento en la Tasa de dosis de radicación
+  - Por último, Irrad.solar apenas aporta algo de relevancia al modelo ni beneficia ni perjudica a la varbale respuesta.
+
+
+### Selección variables clásica
+Siguiendo el calculo de mejora en los modelos del proceso iterativo, hacemos uso del criterio de selecciónde variables clásica para variables originales sin transfomaciones ni interacciones.
+```{r}
+# Este fue el modelo ganador por el procedimiento manual
+modeloManual<-modeloFinal
+#summary(modeloManual)
+Rsq(modeloManual,"log_varObjCont",data_train)
+(R2_ModManual<-Rsq(modeloManual,"log_varObjCont",data_test))
+(vif_ModManual<-car::vif(modeloManual))
+```
+```{r}
+#Selección de los mejores predictores según valor mínimo AIC
+datos<-readRDS("todo_cont_V")
+# Creación de variables en el archivo original
+datos$log_varObjCont <-log(datos$varObjCont)
+#Hago la partición
+set.seed(123456)
+trainIndex <- createDataPartition(datos$log_varObjCont,
+p=0.8, list=FALSE)
+data_train <- datos[trainIndex,]
+data_test <- datos[-trainIndex,]
+
+```
+Volvemos a ver la importancia de lo significativo que es la variable Radon, donde además le siguen Temp y pres en menor medida. hay que tener en cuenta que la variable Presion es inversamente prorporcional a la temperatura.
+
+#### Selección clásica variable originales
+
+```{r}
+null<-lm(log_varObjCont
+         ~1, data=data_train) #Modelo minimo
+full<-lm(log_varObjCont~.,
+data=data_train[,c(1:13,25)])
+#Modelo maximo, le quitamos las transformaciones
+modeloStepAIC0<-step(null, scope=list(lower=null, upper=full), direction="both", trace = F)
+#summary(modeloStepAIC0)
+(R2_StepAIC_0<-Rsq(modeloStepAIC0,"log_varObjCont",data_test))
+```
+
+```{r}
+#VIF
+(vif_StepAIC_0<-car::vif(modeloStepAIC0))
+```
+
+Vemos como el vif de mes supera a 5 lo que hace situralo en valores normales aunque no decartable.Sigamos probando con el mismo número de variables
+```{r}
+#Modelo sin mes
+full<-lm(log_varObjCont~., data=data_train[,c(1:13,25)])
+modeloStepAIC<-step(null, scope=list(lower=null, upper=full),
+direction="both", trace = F)
+
+(R2_StepAIC<-Rsq(modeloStepAIC,"log_varObjCont",data_test))
+
+
+```
+```{r}
+(vif_StepAIC<-car::vif(modeloStepAIC))
+```
+
+```{r stepBIC variables originales}
+modeloStepBIC<-step(null, scope=list(lower=null, upper=full), direction="both",k=log(nrow(data_train)), trace = F)
+summary(modeloStepBIC)
+(R2_StepBIC<-Rsq(modeloStepBIC,"log_varObjCont",data_test)) 
+(vif_StepBIC<-car::vif(modeloStepBIC))
+```
+
+```{r}
+modeloBackAIC<-step(full, scope=list(lower=null, upper=full), direction="backward", trace = F)
+
+summary(modeloBackAIC)
+(R2_BackAIC<-Rsq(modeloBackAIC,"log_varObjCont",data_test))
+(vif_BackAIC<-car::vif(modeloBackAIC))
+```
+
+```{r backBIC variables originales}
+modeloBackBIC<-step(full, scope=list(lower=null, upper=full), direction="backward",k=log(nrow(data_train)),trace = F)
+summary(modeloBackBIC)
+(R2_BackBIC<-Rsq(modeloBackBIC,"log_varObjCont",data_test)) 
+(vif_BackBIC<-car::vif(modeloBackBIC))
+
+```
+
+Generan resultados R2 exactos en ambas técnicas, teniendo en cuenta que las tecnicas backward bajan el VIF lo que nos evitara la multicorrelacion 
+
+```{r tabla resumen seleccion clasica variables originales}
+# Tabla resumen de modelos con criterios
+# Parámetros
+tabla_modelos <- tibble(
+  Modelo = c("StepAIC_0","BackAIC","StepAIC",
+             "BackBIC","StepBIC"),                              parametros=c(modeloStepAIC0$rank,modeloBackAIC$rank,
+              modeloStepAIC$rank,modeloBackBIC$rank,
+              modeloStepBIC$rank),
+  R2_Adj= c(R2_StepAIC_0[[2]],R2_BackAIC[[2]],R2_StepAIC[[2]],
+            R2_BackBIC[[2]],R2_StepBIC[[2]]),
+  VIF_max=c(max(vif_StepAIC_0[,3]),max(vif_BackAIC[,3]),
+            max(vif_StepAIC[,3]),max(vif_BackBIC[,3]),
+            max(vif_StepBIC[,3])))
+
+
+# Se imprime la tabla:
+library(kableExtra)
+kable(tabla_modelos,
+      caption = "Modelos Selección de variables clásica", 
+      booktabs = T) %>%
+kable_styling(latex_options = "striped")
+
+
+```
+vemos que el Rajustado es mejor en modelos clasicso backward ohacia atras y además el factor de inflación de la varianza, comparando el VIF generalizado y sobre todo, para el caso que estudiamos de la variable categórica mes, es mejor en estos ultimos casos. . 
+#### Interacciones con variables originales
+En este caso generamos todas las posibles interacciones entre las variables categóricas y continuas (que son las más comunes) y se buscan los modelos con selección de variables clásica.
+```{r}
+
+formInt<-formulaInteracciones(data_train[,c(1:13,25)],14)#en el subconjunto de las vbles. originales
+fullInt<-lm(formInt, data=data_train)
+modeloStepAIC_int<-step(null, scope=list(lower=null, upper=fullInt), direction="both", trace = F)
+(R2_StepAIC_int<-Rsq(modeloStepAIC_int,"log_varObjCont",data_test))
+
+modeloStepBIC_int<-step(null, scope=list(lower=null, upper=fullInt), direction="both", trace=F,k=log(nrow(data_train)))
+summary(modeloStepBIC_int)
+(R2_StepBIC_int<-Rsq(modeloStepBIC_int,"log_varObjCont",data_test)) 
+(vif_StepBIC_int<-car::vif(modeloStepBIC_int))
+
+modeloStepAIC_int$rank #muchos más parámetros
+modeloStepBIC_int$rank
+```
+
+### Selección de variables con tranformaciones (solo efectos ppales)
+Ahora vamos a generar los modelos por selección de variables con originales y transformaciones de las variables continuas. Primero sin interacciones. De esta forma el algoritmo puede elegir entre las transformaciones.
+
+```{r}
+# modelo con transformaciones numericas
+fullTrans<-lm(log_varObjCont~., data=data_train[,-c(7,12:13,23,24)])
+modeloStepAIC_trans<-step(null, scope=list(lower=null, upper=fullTrans), direction="both", trace = F)
+
+(R2_StepAIC_trans<-Rsq(modeloStepAIC_trans,"log_varObjCont",data_test))
+(vif_StepAIC_trans<-car::vif(modeloStepAIC_trans))
+
+modeloStepBIC_trans<-step(null, scope=list(lower=null, upper=fullTrans), direction="both",trace=F,k=log(nrow(data_train)))
+summary(modeloStepBIC_trans)
+(R2_StepBIC_trans<-Rsq(modeloStepBIC_trans,"log_varObjCont",data_test))
+(vif_StepBIC_trans<-car::vif(modeloStepBIC_trans))
+
+```
+### Selección de variables con tranformaciones e interacciones
+Ahora vamos a generar los modelos por selección de variables con todas las posibilidades. Variables originales y transformaciones de las variables continuas sobre las que se generarán todas sus interacciones. De esta forma el algoritmo tiene todos los efectos combinados disponibles para ser elegidos.
+
+```{r modelos con transformaciones e interacciones}
+# Actualizo modelo full con todas las originales y transformaciones excepto las superficies descartadas, floors original,
+#Genero interacciones
+formIntTrans<-formulaInteracciones(data_train[,-c(7,12:13,23,24)],20)#en el subconjunto de las vbles. seleccionado, la objetivo está en la columna 29
+fullIntTrans<-lm(formIntTrans, data=data_train)
+
+modeloStepBIC_transInt<-step(null, scope=list(lower=null, upper=fullIntTrans), direction="both",trace=F,k=log(nrow(data_train)))
+summary(modeloStepBIC_transInt)
+(R2_StepBIC_transInt<-Rsq(modeloStepBIC_transInt,"log_varObjCont",data_test))
+(vif_StepBIC_transInt<-car::vif(modeloStepBIC_transInt))
+modeloStepBIC_transInt$rank
+```
+```{r comparacion train test modelos seleccion clasica y manual}
+# Parámetros
+tabla_modelos <- tibble(
+    Modelo = c("Mejor Manual","Mejor Orig",
+                "Mejor Orig_trans","Mejor Orig_int", 
+               "Mejor Trans_int"),                                                 parametros=c(modeloManual$rank,modeloStepBIC$rank
+                ,modeloStepBIC_trans$rank,modeloStepBIC_int$rank,
+                modeloStepBIC_transInt$rank),
+    R2_Adj= c(R2_ModManual[[2]],R2_StepBIC[[2]],R2_StepBIC_trans[[2]],
+              R2_StepBIC_int[[2]],R2_StepBIC_transInt[[2]]),
+    VIF_max=c(max(vif_ModManual[,3]),max(vif_StepBIC[,3]),
+              max(vif_StepBIC_trans[,3]),max(vif_StepBIC_int[,3]),
+              max(vif_StepBIC_transInt[,3])))
+
+# Se imprime la tabla:
+
+kable(tabla_modelos, caption = "Modelos Selección de variables clásica", booktabs = T) %>%
+kable_styling(latex_options = "striped")
+
+```
+Los modelos transformados tanto sin o con interacción ofrecen malos resultado con GVIF altos y alguno excesivamente alto, pese a que dan R2 altos. Los modelos originales con menor númerod e parámetros, ofrece alto r2 y GVIF no muy alto, lo que lo hace idoneo para nuestra elección. 
+### Selección variables aleatoria
+
+```{r}
+rep<-50
+prop<-0.7
+modelosGenerados<-c()
+
+for (i in 1:rep){
+  set.seed(12345+i)
+  subsample<-data_train[sample(1:nrow(data_train),
+                        prop*nrow(data_train),replace = T),]
+  formOrig<-formula(lm(log_varObjCont~., data=data_train[,c(1:13,25)]))
+  full<-lm(formOrig,data=subsample)
+  #full<-lm(formula(fullTrans),data=subsample)
+  #full<-lm(formInt,data=subsample)
+  #full<-lm(formIntTrans,data=subsample) # con todas ls trasnf.  
+  #e interacc. no hay estabilidad en este caso
+  null<-lm(log_varObjCont~1,data=subsample)
+  modeloAux<-step(null,scope=list(lower=null,upper=full),
+                  direction="both",trace=0,k=log(nrow(subsample)))
+  modelosGenerados<-c(modelosGenerados,paste(sort(gsub(
+    '\n    ','',unlist(strsplit(as.character(formula(modeloAux))[3],
+                                " [+] ")))),collapse = "+"))
+}
+
+# Los 3 más frecuentes
+head(freq(modelosGenerados,sort="dec"),3)
+```
+Tenemos que el modelo más repetido es de 9 variables con mucha diferencia del resto.
+
+```{r modelos seleccion aleatoria variables originales }
+#Modelo aleatorio elegido
+modeloAleatorio1<-lm(log_varObjCont~Desc.Rn+hora+HR+
+                     Luvia+mes+Pres+
+                     prop_missings+Radon+Temp,data_train)
+summary(modeloAleatorio1)
+
+```
+
+Estaría bien evaluar la matriz de confusión de la clasificación hecha por el modelo en los datos de test para resumir las capacidades de nuestro modelo final. Para ello será necesario clasificar dischos registros considerando el punto de corte óptimo, digamos el extrído por Youden de 0.41. 
+
